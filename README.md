@@ -71,7 +71,7 @@ The registry has had one independent audit; the fixes are applied, and the [open
 pip install git+https://github.com/waghmaredb/reversibility-classes
 rclass lookup sqlite write_query --args '{"query": "DROP TABLE users"}'
 # R4  Irreversible  (registry)
-#   Accepts any non-SELECT statement, including UPDATE, DELETE and DROP, which destroy prior values.
+#   Accepts any non-SELECT statement: UPDATE, DELETE and DROP destroy prior values, and even INSERT can be an upsert (INSERT OR REPLACE, ON CONFLICT DO UPDATE) that overwrites rows.
 #   default policy: never_autonomous
 ```
 
