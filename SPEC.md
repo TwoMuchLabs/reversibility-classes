@@ -28,7 +28,7 @@ Sections marked *(informative)* explain or advise and are not requirements.
 - **Effect.** Any change the action causes outside the agent's own working context: to stored data, to money, to access rights, to physical state, or to what another party knows.
 - **Restore.** Return the affected state to exactly what it was before the action.
 - **Compensate.** Take a further, known action that leaves the world in a state the principal accepts as equivalent, at a bounded and knowable cost (a refund, a cancellation, a revert commit).
-- **Disclosure.** An effect through which information reaches a party outside the principal's control. A disclosure cannot be restored: deleting a sent message does not un-send its notification.
+- **Disclosure.** An effect through which information reaches a party outside the principal's control. A disclosure cannot be restored: deleting a sent message does not un-send its notification. In v0.1, an action is a disclosure when its *purpose* is to deliver content to people (a message, comment, email, issue, review or publication) or to place content where people outside the principal can read it (a public repository, a public page). A state change that only *incidentally* notifies someone (assigning a ticket, changing a status, adding a label) is classified by the recoverability of the state change, not as a disclosure. Distinguishing internal from external audiences is an open question (Section 12).
 - **Classifier.** Any component (gateway, proxy, framework, library) that assigns a Reversibility Class to an action before it executes.
 
 ## 4. The five classes
@@ -120,6 +120,8 @@ Supported matchers in v0.1:
 | `absent` | `true` if the argument is not present. |
 
 A rule **MAY** combine several argument conditions under `all:`; all must hold.
+
+A tool marked `disclosure: true` is classified by its worst case. A conditional rule **MAY** lower it only for argument values that verifiably do not disclose (for example, creating a repository with `private: true`, or a server default the record cites). Deployment overrides can never lower it (Section 5.5).
 
 **Safety requirement.** A conditional rule that *lowers* a class below the base **MUST** match a positive, narrowly defined safe form (an allow-list), never a negative one ("does not contain `DROP`"). Classifiers **MUST** fall back to the base class when an argument is missing, malformed, or of an unexpected type.
 

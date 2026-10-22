@@ -1,0 +1,48 @@
+# Reversibility Classes — Brave Search (official MCP server)
+# Tool names verified against the evidence URLs below. Classes are drafts until reviewed.
+spec_version: '0.1'
+server:
+  id: brave-search
+  name: Brave Search (official MCP server)
+  source: https://github.com/brave/brave-search-mcp-server
+  evidence:
+  - https://raw.githubusercontent.com/brave/brave-search-mcp-server/main/README.md
+  - https://github.com/brave/brave-search-mcp-server/tree/main/src/tools
+  version: brave/brave-search-mcp-server@af08e0d4
+  status: active
+  notes: Every tool is a read query against the Brave Search API; the only effect is API quota or per-query
+    billing on the principal's key. Tools can be limited with BRAVE_MCP_ENABLED_TOOLS (allow-list) or
+    --disabled-tools.
+tools:
+- name: brave_web_search
+  class: R0
+  rationale: Runs a web search.
+  review: draft
+- name: brave_local_search
+  class: R0
+  rationale: Runs a local business search.
+  review: draft
+- name: brave_video_search
+  class: R0
+  rationale: Runs a video search.
+  review: draft
+- name: brave_image_search
+  class: R0
+  rationale: Runs an image search.
+  review: draft
+- name: brave_news_search
+  class: R0
+  rationale: Runs a news search.
+  review: draft
+- name: brave_summarizer
+  class: R0
+  rationale: Fetches a summary for an earlier search.
+  review: draft
+- name: brave_place_search
+  class: R0
+  rationale: Runs a points-of-interest search.
+  review: draft
+- name: brave_llm_context
+  class: R0
+  rationale: Fetches pre-extracted page content from the search API.
+  review: draft

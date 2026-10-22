@@ -1,0 +1,373 @@
+# Reversibility Classes — Playwright MCP (Microsoft)
+# Tool names verified against the evidence URLs below. Classes are drafts until reviewed.
+spec_version: '0.1'
+server:
+  id: playwright
+  name: Playwright MCP (Microsoft)
+  source: https://github.com/microsoft/playwright-mcp
+  evidence:
+  - https://raw.githubusercontent.com/microsoft/playwright-mcp/main/README.md
+  version: microsoft/playwright-mcp@ab6d67cb
+  status: active
+  notes: Only Core automation and Tab management are on by default; config, network, storage, devtools,
+    vision, pdf and testing tools are opt-in via --caps. What a click, keystroke, drop or script does
+    depends entirely on the page, so those tools are R4 as for Puppeteer; deployments that restrict the
+    browser to allow-listed sites can override. Cookies and web storage are treated as the profile's sign-in
+    state, so deleting or overwriting them is R3 (a human may have to sign in again); deployments that
+    run each session in a throwaway profile can override them to R1. Viewport, emulation, highlights and
+    recordings are treated as the agent's working context. Several tools the README marks read-only still
+    write files to the server's output directory (screenshot, PDF, storage state, video, trace, and any
+    tool given a filename); those are R1.
+tools:
+- name: browser_click
+  class: R4
+  rationale: A click can submit a form, make a purchase or send a message; the effect depends on the page.
+  review: draft
+- name: browser_close
+  class: R1
+  rationale: Closing discards only the open page's in-session state; the page can be reopened by navigating
+    to it again.
+  compensation: browser_navigate to the page again
+  review: draft
+- name: browser_console_messages
+  class: R1
+  rationale: With a filename the messages are written to a file in the server's output directory, which
+    can simply be deleted.
+  when:
+  - arg: filename
+    absent: true
+    class: R0
+    rationale: Returns console messages without writing a file.
+  compensation: delete the written file
+  review: draft
+- name: browser_drag
+  class: R4
+  rationale: Dragging can reorder, move or submit items in a web app; the effect depends on the page.
+  review: draft
+- name: browser_drop
+  class: R4
+  rationale: Drops local files or data into the page, which can upload or transmit them.
+  review: draft
+- name: browser_emulate_media
+  class: R0
+  rationale: Changes only how the browser session renders the page.
+  review: draft
+- name: browser_evaluate
+  class: R4
+  rationale: Runs arbitrary JavaScript in the page, which can do anything the page can.
+  review: draft
+- name: browser_file_upload
+  class: R4
+  rationale: Hands local files to the page's file chooser, and the page can upload them to a remote server.
+  review: draft
+- name: browser_fill_form
+  class: R4
+  rationale: Typed values can be transmitted by the page as they are entered, and filling can trigger
+    submission.
+  review: draft
+- name: browser_find
+  class: R1
+  rationale: With a filename the results are written to a file in the server's output directory, which
+    can simply be deleted.
+  when:
+  - arg: filename
+    absent: true
+    class: R0
+    rationale: Searches the snapshot without writing a file.
+  compensation: delete the written file
+  review: draft
+- name: browser_handle_dialog
+  class: R4
+  rationale: Accepting a confirm or prompt dialog lets the page carry out whatever it was asking about,
+    such as a deletion or a purchase.
+  review: draft
+- name: browser_hover
+  class: R0
+  rationale: Hovering has no intended effect beyond the page view.
+  review: draft
+- name: browser_navigate
+  class: R0
+  rationale: Navigation only; loads and reads a page.
+  review: draft
+- name: browser_navigate_back
+  class: R0
+  rationale: Navigation only; returns to the previous page in history.
+  review: draft
+- name: browser_network_request
+  class: R1
+  rationale: With a filename the request details are written to a file in the server's output directory,
+    which can simply be deleted.
+  when:
+  - arg: filename
+    absent: true
+    class: R0
+    rationale: Returns captured request details without writing a file.
+  compensation: delete the written file
+  review: draft
+- name: browser_network_requests
+  class: R1
+  rationale: With a filename the request list is written to a file in the server's output directory, which
+    can simply be deleted.
+  when:
+  - arg: filename
+    absent: true
+    class: R0
+    rationale: Lists captured requests without writing a file.
+  compensation: delete the written file
+  review: draft
+- name: browser_press_key
+  class: R4
+  rationale: A key press such as Enter can submit a form or trigger a page action; the effect depends
+    on the page.
+  review: draft
+- name: browser_resize
+  class: R0
+  rationale: Changes only the size of the browser window.
+  review: draft
+- name: browser_run_code_unsafe
+  class: R4
+  rationale: Runs arbitrary Playwright code in the server process, which can drive any page and reach
+    the host.
+  review: draft
+- name: browser_select_option
+  class: R4
+  rationale: A selection can trigger page actions, including submissions.
+  review: draft
+- name: browser_snapshot
+  class: R1
+  rationale: With a filename the snapshot is written to a file in the server's output directory, which
+    can simply be deleted.
+  when:
+  - arg: filename
+    absent: true
+    class: R0
+    rationale: Returns the accessibility snapshot without writing a file.
+  compensation: delete the written file
+  review: draft
+- name: browser_take_screenshot
+  class: R1
+  rationale: Writes an image file to the server's output directory, which can simply be deleted.
+  compensation: delete the written file
+  review: draft
+- name: browser_type
+  class: R4
+  rationale: Typed text can be transmitted by the page as it is entered, and submit sends the form.
+  review: draft
+- name: browser_wait_for
+  class: R0
+  rationale: Waits for text or time; no effect.
+  review: draft
+- name: browser_tabs
+  class: R1
+  rationale: Closing a tab discards its page state; the tab can be reopened from its URL.
+  compensation: browser_tabs create with the closed tab's URL
+  review: draft
+- name: browser_get_config
+  class: R0
+  rationale: Reads server configuration.
+  review: draft
+- name: browser_network_state_set
+  class: R1
+  rationale: Switching the session offline or online changes how the page's requests behave and is undone
+    by setting the previous state.
+  compensation: browser_network_state_set with the previous state
+  review: draft
+- name: browser_route
+  class: R1
+  rationale: Adds a session-scoped mock or header rewrite for matching requests, removed exactly with
+    browser_unroute.
+  compensation: browser_unroute for the same pattern
+  review: draft
+- name: browser_route_list
+  class: R0
+  rationale: Lists active network mocks.
+  review: draft
+- name: browser_unroute
+  class: R1
+  rationale: Removes session-scoped mocks the agent defined, which can be added again with browser_route.
+  compensation: browser_route with the same definitions
+  review: draft
+- name: browser_cookie_clear
+  class: R3
+  rationale: Deletes every cookie, signing the profile out of all sites; recovery is a fresh sign-in by
+    a human.
+  review: draft
+- name: browser_cookie_delete
+  class: R3
+  rationale: Deleting a session cookie signs the profile out of that site; the tool returns no copy, so
+    recovery is a fresh sign-in by a human.
+  review: draft
+- name: browser_cookie_get
+  class: R0
+  rationale: Reads a cookie.
+  review: draft
+- name: browser_cookie_list
+  class: R0
+  rationale: Lists cookies.
+  review: draft
+- name: browser_cookie_set
+  class: R3
+  rationale: Can overwrite or plant a sign-in cookie, and the tool returns no copy of the old value; recovery
+    can need a fresh sign-in by a human.
+  review: draft
+- name: browser_localstorage_clear
+  class: R3
+  rationale: Clears all localStorage for the origin, which can hold sign-in tokens and site data, with
+    no copy returned; recovery needs a fresh sign-in or the site to rebuild it.
+  review: draft
+- name: browser_localstorage_delete
+  class: R3
+  rationale: Deletes a localStorage key, which can hold a sign-in token or site data, with no copy returned.
+  review: draft
+- name: browser_localstorage_get
+  class: R0
+  rationale: Reads a localStorage key.
+  review: draft
+- name: browser_localstorage_list
+  class: R0
+  rationale: Lists localStorage entries.
+  review: draft
+- name: browser_localstorage_set
+  class: R3
+  rationale: Overwrites a localStorage key, which can hold a sign-in token or site data, with no copy
+    of the old value returned.
+  review: draft
+- name: browser_sessionstorage_clear
+  class: R3
+  rationale: Clears all sessionStorage for the tab, which can hold sign-in tokens and in-progress site
+    data, with no copy returned.
+  review: draft
+- name: browser_sessionstorage_delete
+  class: R3
+  rationale: Deletes a sessionStorage key, which can hold a sign-in token or in-progress site data, with
+    no copy returned.
+  review: draft
+- name: browser_sessionstorage_get
+  class: R0
+  rationale: Reads a sessionStorage key.
+  review: draft
+- name: browser_sessionstorage_list
+  class: R0
+  rationale: Lists sessionStorage entries.
+  review: draft
+- name: browser_sessionstorage_set
+  class: R3
+  rationale: Overwrites a sessionStorage key, which can hold a sign-in token or in-progress site data,
+    with no copy of the old value returned.
+  review: draft
+- name: browser_set_storage_state
+  class: R3
+  rationale: Clears the existing cookies and storage before loading the file, signing the profile out
+    of sites not in the file; recovery is a fresh sign-in.
+  review: draft
+- name: browser_storage_state
+  class: R1
+  rationale: Writes the cookies and storage, including sign-in tokens, to a local file that can simply
+    be deleted.
+  compensation: delete the written file
+  review: draft
+- name: browser_annotate
+  class: R0
+  rationale: Opens the local dashboard and waits for the user's annotations.
+  review: draft
+- name: browser_hide_highlight
+  class: R0
+  rationale: Removes an overlay from the page view.
+  review: draft
+- name: browser_highlight
+  class: R0
+  rationale: Draws an overlay on the page view.
+  review: draft
+- name: browser_resume
+  class: R0
+  rationale: Lets paused page code continue as it would have run; the agent supplies no new input.
+  review: draft
+- name: browser_start_recording
+  class: R0
+  rationale: Starts recording actions as code returned to the agent.
+  review: draft
+- name: browser_start_tracing
+  class: R1
+  rationale: Starts a trace that is written to the server's output directory, which can simply be deleted.
+  compensation: delete the trace file
+  review: draft
+- name: browser_start_video
+  class: R1
+  rationale: Starts a video recording that is written to a local file, which can simply be deleted.
+  compensation: delete the video file
+  review: draft
+- name: browser_stop_recording
+  class: R0
+  rationale: Stops recording and returns the generated code.
+  review: draft
+- name: browser_stop_tracing
+  class: R1
+  rationale: Finishes the trace file in the server's output directory, which can simply be deleted.
+  compensation: delete the trace file
+  review: draft
+- name: browser_stop_video
+  class: R1
+  rationale: Finishes the video file, which can simply be deleted.
+  compensation: delete the video file
+  review: draft
+- name: browser_video_chapter
+  class: R0
+  rationale: Adds a chapter card to the agent's own recording.
+  review: draft
+- name: browser_video_hide_actions
+  class: R0
+  rationale: Changes only the overlays in the agent's own recording.
+  review: draft
+- name: browser_video_show_actions
+  class: R0
+  rationale: Changes only the overlays in the agent's own recording.
+  review: draft
+- name: browser_mouse_click_xy
+  class: R4
+  rationale: A click can submit a form, make a purchase or send a message; the effect depends on the page.
+  review: draft
+- name: browser_mouse_down
+  class: R4
+  rationale: Pressing a button is half of a click and pages can act on it; the effect depends on the page.
+  review: draft
+- name: browser_mouse_drag_xy
+  class: R4
+  rationale: Dragging can reorder, move or submit items in a web app; the effect depends on the page.
+  review: draft
+- name: browser_mouse_move_xy
+  class: R0
+  rationale: Moving the pointer has no intended effect beyond the page view.
+  review: draft
+- name: browser_mouse_up
+  class: R4
+  rationale: Releasing a button completes a click, which can submit a form or trigger a page action.
+  review: draft
+- name: browser_mouse_wheel
+  class: R0
+  rationale: Scrolling has no intended effect beyond the page view.
+  review: draft
+- name: browser_pdf_save
+  class: R1
+  rationale: Writes a PDF file to the server's output directory, which can simply be deleted.
+  compensation: delete the written file
+  review: draft
+- name: browser_generate_locator
+  class: R0
+  rationale: Generates a locator string.
+  review: draft
+- name: browser_verify_element_visible
+  class: R0
+  rationale: Asserts against the page without changing it.
+  review: draft
+- name: browser_verify_list_visible
+  class: R0
+  rationale: Asserts against the page without changing it.
+  review: draft
+- name: browser_verify_text_visible
+  class: R0
+  rationale: Asserts against the page without changing it.
+  review: draft
+- name: browser_verify_value
+  class: R0
+  rationale: Asserts against the page without changing it.
+  review: draft

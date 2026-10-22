@@ -1,0 +1,561 @@
+# Reversibility Classes — GitHub (official MCP server)
+# Tool names verified against the evidence URLs below. Classes are drafts until reviewed.
+spec_version: '0.1'
+server:
+  id: github
+  name: GitHub (official MCP server)
+  source: https://github.com/github/github-mcp-server
+  evidence:
+  - https://raw.githubusercontent.com/github/github-mcp-server/main/README.md
+  version: github/github-mcp-server@b98d115b
+  status: active
+  notes: Covers the 96 tools in the README's generated Tools section, including 4 remote-server-only tools;
+    39 further tools gated behind feature flags or insiders/granular mode are not classified here and
+    fall under the fail-closed rule. The --read-only flag (GITHUB_READ_ONLY=1) exposes only the read tools,
+    and --toolsets/--tools filter the tool list; neither changes a tool's class. Disclosure classes assume
+    the target repository may be public.
+tools:
+- name: actions_get
+  class: R0
+  rationale: Reads workflow, run, job, usage or artifact and log URL data.
+  review: draft
+- name: actions_list
+  class: R0
+  rationale: Lists workflows, runs, jobs or artifacts.
+  review: draft
+- name: actions_run_trigger
+  class: R4
+  rationale: Running or re-running a workflow executes arbitrary repository code with its secrets, which
+    can deploy, publish or delete anything the workflow can reach, and delete_workflow_run_logs permanently
+    removes logs.
+  when:
+  - arg: method
+    equals: cancel_workflow_run
+    class: R2
+    rationale: A cancelled run can be re-run, but steps it had already completed are not undone.
+  review: draft
+- name: get_job_logs
+  class: R0
+  rationale: Reads job logs.
+  review: draft
+- name: get_code_quality_finding
+  class: R0
+  rationale: Reads a code quality finding.
+  review: draft
+- name: get_code_scanning_alert
+  class: R0
+  rationale: Reads a code scanning alert.
+  review: draft
+- name: list_code_scanning_alerts
+  class: R0
+  rationale: Lists code scanning alerts.
+  review: draft
+- name: get_me
+  class: R0
+  rationale: Reads the authenticated user's profile.
+  review: draft
+- name: get_team_members
+  class: R0
+  rationale: Lists team members.
+  review: draft
+- name: get_teams
+  class: R0
+  rationale: Lists a user's teams.
+  review: draft
+- name: ui_get
+  class: R0
+  rationale: Reads picker data such as labels, assignees and branches.
+  review: draft
+- name: assign_copilot_to_issue
+  class: R4
+  rationale: Starts the Copilot coding agent, which works autonomously and opens a pull request that other
+    people can see.
+  disclosure: true
+  review: draft
+- name: request_copilot_review
+  class: R4
+  rationale: Copilot posts a review with comments on the pull request, which other people can see.
+  disclosure: true
+  review: draft
+- name: assign_copilot_to_issue_with_intent
+  class: R4
+  rationale: Assigning Copilot starts the coding agent, which opens a pull request that other people can
+    see; with is_suggestion the server records a pending assignment intent instead, but how that intent
+    is shown to others and withdrawn is not documented, so no lower rule is given.
+  disclosure: true
+  review: draft
+- name: get_dependabot_alert
+  class: R0
+  rationale: Reads a Dependabot alert.
+  review: draft
+- name: list_dependabot_alerts
+  class: R0
+  rationale: Lists Dependabot alerts.
+  review: draft
+- name: discussion_comment_write
+  class: R4
+  rationale: Adding, replying to or editing a comment publishes content to discussion participants, and
+    delete removes a comment with no recovery path.
+  disclosure: true
+  when:
+  - arg: method
+    in:
+    - mark_answer
+    - unmark_answer
+    class: R2
+    rationale: The answer marking can be set back to the previous answer, which was readable before the
+      change.
+  review: draft
+- name: get_discussion
+  class: R0
+  rationale: Reads a discussion.
+  review: draft
+- name: get_discussion_comments
+  class: R0
+  rationale: Reads discussion comments.
+  review: draft
+- name: list_discussion_categories
+  class: R0
+  rationale: Lists discussion categories.
+  review: draft
+- name: list_discussions
+  class: R0
+  rationale: Lists discussions.
+  review: draft
+- name: create_gist
+  class: R4
+  rationale: A public gist is published where anyone can read it.
+  disclosure: true
+  when:
+  - arg: public
+    equals: false
+    class: R1
+    rationale: A secret gist is unlisted and only reachable by someone given its URL, and it can be deleted.
+  - arg: public
+    absent: true
+    class: R1
+    rationale: public defaults to false in the server schema, so the gist is secret and can be deleted.
+  compensation: delete the gist on github.com
+  review: draft
+- name: get_gist
+  class: R0
+  rationale: Reads a gist.
+  review: draft
+- name: list_gists
+  class: R0
+  rationale: Lists gists.
+  review: draft
+- name: update_gist
+  class: R4
+  rationale: Places new content in a gist that may be public, and the tool cannot tell whether it is.
+  disclosure: true
+  review: draft
+- name: get_repository_tree
+  class: R0
+  rationale: Reads a git tree.
+  review: draft
+- name: create_repository_ruleset
+  class: R3
+  rationale: An active ruleset changes who can push, merge or create refs across a repository, organization
+    or enterprise.
+  when:
+  - arg: enforcement
+    in:
+    - disabled
+    - evaluate
+    class: R1
+    rationale: A disabled or evaluate-only ruleset blocks nothing and can be deleted.
+  compensation: delete the ruleset
+  review: draft
+- name: custom_properties_read
+  class: R0
+  rationale: Reads custom property values or definitions.
+  review: draft
+- name: custom_properties_write
+  class: R3
+  rationale: Rulesets can target repositories by custom property, so changing property values or org/enterprise
+    definitions can change which access rules apply to which repositories.
+  review: draft
+- name: repository_ruleset_read
+  class: R0
+  rationale: Reads rulesets and rule-suite evaluations.
+  review: draft
+- name: add_issue_comment
+  class: R4
+  rationale: Posts a comment or reaction that other people see and are notified of; deleting it later
+    does not un-send it.
+  disclosure: true
+  review: draft
+- name: get_label
+  class: R0
+  rationale: Reads a label.
+  review: draft
+- name: issue_read
+  class: R0
+  rationale: Reads an issue and its related data.
+  review: draft
+- name: issue_write
+  class: R4
+  rationale: Creating an issue or rewriting its body publishes content to everyone who can see the repository.
+  disclosure: true
+  when:
+  - all:
+    - arg: method
+      equals: update
+    - arg: body
+      absent: true
+    class: R2
+    rationale: Title, state, labels, assignees, milestone, type and fields can be set back to their previous
+      values, which were readable before the change.
+  compensation: issue_write update with the previous values
+  review: draft
+- name: list_issue_fields
+  class: R0
+  rationale: Lists issue fields.
+  review: draft
+- name: list_issue_types
+  class: R0
+  rationale: Lists issue types.
+  review: draft
+- name: list_issues
+  class: R0
+  rationale: Lists issues.
+  review: draft
+- name: search_issues
+  class: R0
+  rationale: Searches issues.
+  review: draft
+- name: sub_issue_write
+  class: R2
+  rationale: Adding, removing or reordering a sub-issue can be reversed with the opposite method, but
+    a removed or moved sub-issue's previous position and parent must be set again by hand.
+  compensation: sub_issue_write with the inverse method
+  review: draft
+- name: update_issue_comment
+  class: R4
+  rationale: Replaces a comment's body with new content that everyone who can see the issue can read.
+  disclosure: true
+  review: draft
+- name: label_write
+  class: R4
+  rationale: Deleting a label removes it from every issue and pull request, and recreating the label does
+    not restore those associations.
+  when:
+  - arg: method
+    equals: create
+    class: R1
+    rationale: A new label can be deleted before it is applied.
+  - arg: method
+    equals: update
+    class: R2
+    rationale: The previous name and color were readable and can be set again.
+  compensation: label_write delete (create) or update with the previous values (update)
+  review: draft
+- name: list_label
+  class: R0
+  rationale: Lists labels.
+  review: draft
+- name: dismiss_notification
+  class: R1
+  rationale: Marking one notification thread read or done changes only the user's own inbox and can be
+    undone on github.com.
+  compensation: mark the thread unread or move it back to the inbox on github.com
+  review: draft
+- name: get_notification_details
+  class: R0
+  rationale: Reads a notification.
+  review: draft
+- name: list_notifications
+  class: R0
+  rationale: Lists notifications.
+  review: draft
+- name: manage_notification_subscription
+  class: R2
+  rationale: Changes the user's own subscription to a thread; a subscription can be set again, but the
+    tool does not return the previous setting.
+  compensation: manage_notification_subscription with the previous setting
+  review: draft
+- name: manage_repository_notification_subscription
+  class: R2
+  rationale: Changes the user's own subscription to a repository; a subscription can be set again, but
+    the tool does not return the previous setting.
+  compensation: manage_repository_notification_subscription with the previous setting
+  review: draft
+- name: mark_all_notifications_read
+  class: R2
+  rationale: Which notifications were unread is not recorded, so they can only be marked unread again
+    one by one from a list taken beforehand.
+  review: draft
+- name: search_orgs
+  class: R0
+  rationale: Searches organizations.
+  review: draft
+- name: projects_get
+  class: R0
+  rationale: Reads project data.
+  review: draft
+- name: projects_list
+  class: R0
+  rationale: Lists project data.
+  review: draft
+- name: projects_write
+  class: R4
+  rationale: create_project_status_update posts an update to project viewers, and the delete methods remove
+    items or views, with their field values, with no recovery path.
+  disclosure: true
+  when:
+  - arg: method
+    in:
+    - add_project_item
+    - create_project
+    - create_project_view
+    - create_iteration_field
+    class: R1
+    rationale: A newly added item, project, view or field can be removed.
+  - arg: method
+    in:
+    - update_project_item
+    - update_project_items
+    - update_project_view
+    class: R2
+    rationale: Field values and view settings can be set back to their previous values, which were readable
+      before the change.
+  review: draft
+- name: add_comment_to_pending_review
+  class: R1
+  rationale: A comment on a pending review is visible only to its author until the review is submitted,
+    and the pending review can be deleted.
+  compensation: pull_request_review_write delete_pending
+  review: draft
+- name: add_reply_to_pull_request_comment
+  class: R4
+  rationale: Posts a reply or reaction that other people see and are notified of.
+  disclosure: true
+  review: draft
+- name: create_pull_request
+  class: R4
+  rationale: Opens a pull request, draft or not, that everyone who can see the repository can read, and
+    notifies requested reviewers.
+  disclosure: true
+  review: draft
+- name: list_pull_requests
+  class: R0
+  rationale: Lists pull requests.
+  review: draft
+- name: merge_pull_request
+  class: R2
+  rationale: A merge can be reverted with a revert commit, but it may already have triggered deployments
+    or been pulled by others.
+  compensation: revert commit
+  review: draft
+- name: pull_request_read
+  class: R0
+  rationale: Reads a pull request and its related data.
+  review: draft
+- name: pull_request_review_write
+  class: R4
+  rationale: Submitting a review, or creating one with an event, publishes it to the pull request's participants,
+    and delete_pending removes an unsubmitted review with no recovery path.
+  disclosure: true
+  when:
+  - all:
+    - arg: method
+      equals: create
+    - arg: event
+      absent: true
+    class: R1
+    rationale: Without an event the review stays pending and visible only to its author, and it can be
+      deleted.
+  - arg: method
+    in:
+    - resolve_thread
+    - unresolve_thread
+    class: R1
+    rationale: Resolving a thread can be toggled back exactly.
+  compensation: pull_request_review_write delete_pending (pending review) or the opposite resolve method
+  review: draft
+- name: search_pull_requests
+  class: R0
+  rationale: Searches pull requests.
+  review: draft
+- name: update_pull_request
+  class: R4
+  rationale: Rewriting a pull request's body publishes new content to everyone who can see the repository.
+  disclosure: true
+  when:
+  - arg: body
+    absent: true
+    class: R2
+    rationale: Title, base, draft state, reviewers and open/closed state can be set back to their previous
+      values, which were readable before the change.
+  compensation: update_pull_request with the previous values
+  review: draft
+- name: update_pull_request_branch
+  class: R2
+  rationale: Adds a merge commit to the head branch that can be reverted, but it may already have triggered
+    checks or been pulled by others.
+  compensation: revert commit
+  review: draft
+- name: create_branch
+  class: R1
+  rationale: A new branch adds no new content and can be deleted.
+  compensation: delete the branch
+  review: draft
+- name: create_or_update_file
+  class: R4
+  rationale: Commits content to a repository that may be public; deleting it later does not remove it
+    from history or from anyone who already fetched it.
+  disclosure: true
+  review: draft
+- name: create_repository
+  class: R4
+  rationale: With private set to false, the repository is public and its name and initial content are
+    published to everyone.
+  disclosure: true
+  when:
+  - arg: private
+    equals: true
+    class: R1
+    rationale: A new private repository can be deleted.
+  - arg: private
+    absent: true
+    class: R1
+    rationale: private defaults to true in the server schema, so the new repository is private and can
+      be deleted.
+  compensation: delete_repository
+  review: draft
+- name: delete_file
+  class: R2
+  rationale: The deletion is a commit and the file remains in history, so a follow-up commit restores
+    it, but the commit may already have triggered workflows or been pulled by others.
+  compensation: revert commit
+  review: draft
+- name: delete_repository
+  class: R4
+  rationale: Deletes the repository with all its issues, pull requests, wiki and settings; GitHub's 90-day
+    restore is an out-of-band process that does not cover every repository.
+  review: draft
+- name: fork_repository
+  class: R1
+  rationale: A fork copies content its viewers could already see and can be deleted.
+  compensation: delete_repository on the fork
+  review: draft
+- name: get_commit
+  class: R0
+  rationale: Reads a commit.
+  review: draft
+- name: get_file_contents
+  class: R0
+  rationale: Reads a file or directory.
+  review: draft
+- name: get_latest_release
+  class: R0
+  rationale: Reads a release.
+  review: draft
+- name: get_release_by_tag
+  class: R0
+  rationale: Reads a release.
+  review: draft
+- name: get_tag
+  class: R0
+  rationale: Reads a tag.
+  review: draft
+- name: list_branches
+  class: R0
+  rationale: Lists branches.
+  review: draft
+- name: list_commits
+  class: R0
+  rationale: Lists commits.
+  review: draft
+- name: list_releases
+  class: R0
+  rationale: Lists releases.
+  review: draft
+- name: list_repository_collaborators
+  class: R0
+  rationale: Lists collaborators.
+  review: draft
+- name: list_tags
+  class: R0
+  rationale: Lists tags.
+  review: draft
+- name: push_files
+  class: R4
+  rationale: Commits content to a repository that may be public; deleting it later does not remove it
+    from history or from anyone who already fetched it.
+  disclosure: true
+  review: draft
+- name: search_code
+  class: R0
+  rationale: Searches code.
+  review: draft
+- name: search_commits
+  class: R0
+  rationale: Searches commits.
+  review: draft
+- name: search_repositories
+  class: R0
+  rationale: Searches repositories.
+  review: draft
+- name: get_secret_scanning_alert
+  class: R0
+  rationale: Reads a secret scanning alert.
+  review: draft
+- name: list_secret_scanning_alerts
+  class: R0
+  rationale: Lists secret scanning alerts.
+  review: draft
+- name: get_global_security_advisory
+  class: R0
+  rationale: Reads an advisory.
+  review: draft
+- name: list_global_security_advisories
+  class: R0
+  rationale: Lists advisories.
+  review: draft
+- name: list_org_repository_security_advisories
+  class: R0
+  rationale: Lists advisories.
+  review: draft
+- name: list_repository_security_advisories
+  class: R0
+  rationale: Lists advisories.
+  review: draft
+- name: list_starred_repositories
+  class: R0
+  rationale: Lists starred repositories.
+  review: draft
+- name: star_repository
+  class: R1
+  rationale: A star can be removed, restoring the previous state exactly.
+  compensation: unstar_repository
+  review: draft
+- name: unstar_repository
+  class: R2
+  rationale: Starring again restores the star but not its original date or the star lists it belonged
+    to.
+  compensation: star_repository
+  review: draft
+- name: search_users
+  class: R0
+  rationale: Searches users.
+  review: draft
+- name: create_pull_request_with_copilot
+  class: R4
+  rationale: Hands a task to the Copilot coding agent, which opens a pull request that other people can
+    see.
+  disclosure: true
+  review: draft
+- name: get_copilot_space
+  class: R0
+  rationale: Reads a Copilot Space.
+  review: draft
+- name: list_copilot_spaces
+  class: R0
+  rationale: Lists Copilot Spaces.
+  review: draft
+- name: github_support_docs_search
+  class: R0
+  rationale: Searches GitHub documentation.
+  review: draft

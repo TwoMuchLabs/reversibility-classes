@@ -1,0 +1,43 @@
+# Reversibility Classes — Google Maps (archived MCP reference server)
+# Tool names verified against the evidence URLs below. Classes are drafts until reviewed.
+spec_version: '0.1'
+server:
+  id: google-maps
+  name: Google Maps (archived MCP reference server)
+  source: https://github.com/modelcontextprotocol/servers-archived/tree/main/src/google-maps
+  evidence:
+  - https://raw.githubusercontent.com/modelcontextprotocol/servers-archived/main/src/google-maps/README.md
+  - https://raw.githubusercontent.com/modelcontextprotocol/servers-archived/main/src/google-maps/index.ts
+  status: archived
+  notes: Archived (assumed from the servers-archived repository; not confirmed via the GitHub API). Every
+    tool is a read lookup against Google Maps APIs; the only effect is API quota or billing on the principal's
+    key.
+tools:
+- name: maps_geocode
+  class: R0
+  rationale: Looks up coordinates for an address.
+  review: draft
+- name: maps_reverse_geocode
+  class: R0
+  rationale: Looks up an address for coordinates.
+  review: draft
+- name: maps_search_places
+  class: R0
+  rationale: Searches for places.
+  review: draft
+- name: maps_place_details
+  class: R0
+  rationale: Reads details for a place.
+  review: draft
+- name: maps_distance_matrix
+  class: R0
+  rationale: Computes distances and travel times.
+  review: draft
+- name: maps_elevation
+  class: R0
+  rationale: Looks up elevations.
+  review: draft
+- name: maps_directions
+  class: R0
+  rationale: Computes route directions.
+  review: draft
