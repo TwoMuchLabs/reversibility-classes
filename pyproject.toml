@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rclass"
+version = "0.1.0"
+description = "Reversibility Classes (R0-R4) for AI agent tool calls: spec, open registry and reference classifier"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+authors = [{ name = "Deepak Waghmare" }]
+keywords = ["ai-agents", "mcp", "model-context-protocol", "ai-governance", "agent-security", "guardrails", "eu-ai-act"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Topic :: Security",
+]
+dependencies = ["pyyaml>=6", "jsonschema>=4.18"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+rclass = "rclass.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/waghmaredb/reversibility-classes"
+Specification = "https://github.com/waghmaredb/reversibility-classes/blob/main/SPEC.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["rclass"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"schema/rclass.schema.json" = "rclass/rclass.schema.json"
+"registry" = "rclass/registry"

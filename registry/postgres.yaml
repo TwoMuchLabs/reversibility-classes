@@ -1,0 +1,19 @@
+# Reversibility Classes — PostgreSQL (archived MCP reference server)
+# Tool names verified against the evidence URLs below. Classes are drafts until reviewed.
+spec_version: '0.1'
+server:
+  id: postgres
+  name: PostgreSQL (archived MCP reference server)
+  source: https://github.com/modelcontextprotocol/servers-archived/tree/main/src/postgres
+  evidence:
+  - https://raw.githubusercontent.com/modelcontextprotocol/servers-archived/main/src/postgres/README.md
+  - https://raw.githubusercontent.com/modelcontextprotocol/servers-archived/main/src/postgres/index.ts
+  version: modelcontextprotocol/servers-archived@9be4674d
+  status: archived
+  notes: Archived. The server runs every query inside a READ ONLY transaction and always rolls it back.
+tools:
+- name: query
+  class: R0
+  rationale: The server enforces a read-only transaction that is always rolled back. Functions callable
+    in read-only mode depend on the database role's privileges.
+  review: draft

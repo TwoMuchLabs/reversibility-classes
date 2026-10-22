@@ -1,0 +1,274 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/waghmaredb/reversibility-classes/schema/rclass.schema.json",
+  "title": "Reversibility Classes — classification record",
+  "description": "Assigns Reversibility Classes (R0–R4) to the tools of one tool server. See SPEC.md.",
+  "type": "object",
+  "required": [
+    "spec_version",
+    "server",
+    "tools"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "spec_version": {
+      "type": "string",
+      "pattern": "^0\\.1$"
+    },
+    "server": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "source",
+        "evidence"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "type": "string",
+          "format": "uri"
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "version": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "active",
+            "archived"
+          ]
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "default_class": {
+      "$ref": "#/$defs/class"
+    },
+    "tools": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/tool"
+      }
+    }
+  },
+  "$defs": {
+    "class": {
+      "enum": [
+        "R0",
+        "R1",
+        "R2",
+        "R3",
+        "R4"
+      ]
+    },
+    "tool": {
+      "type": "object",
+      "required": [
+        "name",
+        "class",
+        "rationale"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "class": {
+          "$ref": "#/$defs/class"
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "disclosure": {
+          "type": "boolean",
+          "description": "True if the tool's effect includes a disclosure (SPEC 4.1 rule 2). Overrides can never lower such a tool."
+        },
+        "when": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/rule"
+          }
+        },
+        "compensation": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "undo_window": {
+          "type": "string",
+          "pattern": "^P(?!$)(\\d+Y)?(\\d+M)?(\\d+W)?(\\d+D)?(T(?=\\d)(\\d+H)?(\\d+M)?(\\d+S)?)?$"
+        },
+        "review": {
+          "enum": [
+            "draft",
+            "reviewed",
+            "verified"
+          ]
+        }
+      }
+    },
+    "condition": {
+      "type": "object",
+      "required": [
+        "arg"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "arg": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Argument name; dots address nested fields, e.g. options.force"
+        },
+        "equals": {},
+        "in": {
+          "type": "array",
+          "minItems": 1
+        },
+        "matches": {
+          "type": "string",
+          "minLength": 1
+        },
+        "absent": {
+          "type": "boolean"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "equals"
+          ]
+        },
+        {
+          "required": [
+            "in"
+          ]
+        },
+        {
+          "required": [
+            "matches"
+          ]
+        },
+        {
+          "required": [
+            "absent"
+          ]
+        }
+      ]
+    },
+    "rule": {
+      "type": "object",
+      "required": [
+        "class",
+        "rationale"
+      ],
+      "properties": {
+        "arg": {
+          "type": "string"
+        },
+        "equals": {},
+        "in": {
+          "type": "array",
+          "minItems": 1
+        },
+        "matches": {
+          "type": "string"
+        },
+        "absent": {
+          "type": "boolean"
+        },
+        "all": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/condition"
+          }
+        },
+        "class": {
+          "$ref": "#/$defs/class"
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "all"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "arg"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "arg"
+          ],
+          "not": {
+            "required": [
+              "all"
+            ]
+          },
+          "oneOf": [
+            {
+              "required": [
+                "equals"
+              ]
+            },
+            {
+              "required": [
+                "in"
+              ]
+            },
+            {
+              "required": [
+                "matches"
+              ]
+            },
+            {
+              "required": [
+                "absent"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

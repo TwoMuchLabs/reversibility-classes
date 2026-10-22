@@ -1,0 +1,68 @@
+# Reversibility Classes — Git (MCP reference server)
+# Tool names verified against the evidence URLs below. Classes are drafts until reviewed.
+spec_version: '0.1'
+server:
+  id: git
+  name: Git (MCP reference server)
+  source: https://github.com/modelcontextprotocol/servers/tree/main/src/git
+  evidence:
+  - https://raw.githubusercontent.com/modelcontextprotocol/servers/main/src/git/README.md
+  - https://raw.githubusercontent.com/modelcontextprotocol/servers/main/src/git/src/mcp_server_git/server.py
+  version: modelcontextprotocol/servers@51b6382a
+  status: active
+  notes: The server has no push, fetch or remote tools, so every effect stays in the local repository.
+tools:
+- name: git_status
+  class: R0
+  rationale: Reads repository state.
+  review: draft
+- name: git_diff_unstaged
+  class: R0
+  rationale: Reads repository state.
+  review: draft
+- name: git_diff_staged
+  class: R0
+  rationale: Reads repository state.
+  review: draft
+- name: git_diff
+  class: R0
+  rationale: Reads repository state.
+  review: draft
+- name: git_commit
+  class: R1
+  rationale: A local commit that has not been pushed can be undone with a reset.
+  compensation: git reset to the previous commit
+  review: draft
+- name: git_add
+  class: R1
+  rationale: Staging can be undone by unstaging.
+  compensation: git_reset
+  review: draft
+- name: git_reset
+  class: R1
+  rationale: Unstages changes and leaves the working tree untouched; the files can be staged again.
+  compensation: git_add
+  review: draft
+- name: git_log
+  class: R0
+  rationale: Reads history.
+  review: draft
+- name: git_create_branch
+  class: R1
+  rationale: A new local branch can be deleted.
+  compensation: delete the branch
+  review: draft
+- name: git_checkout
+  class: R1
+  rationale: Switching branches can be reversed by checking out the previous branch; git refuses checkouts
+    that would overwrite uncommitted changes.
+  compensation: git_checkout the previous branch
+  review: draft
+- name: git_show
+  class: R0
+  rationale: Reads a commit or file.
+  review: draft
+- name: git_branch
+  class: R0
+  rationale: Lists branches.
+  review: draft

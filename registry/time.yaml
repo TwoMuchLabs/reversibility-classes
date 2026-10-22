@@ -1,0 +1,21 @@
+# Reversibility Classes — Time (MCP reference server)
+# Tool names verified against the evidence URLs below. Classes are drafts until reviewed.
+spec_version: '0.1'
+server:
+  id: time
+  name: Time (MCP reference server)
+  source: https://github.com/modelcontextprotocol/servers/tree/main/src/time
+  evidence:
+  - https://raw.githubusercontent.com/modelcontextprotocol/servers/main/src/time/README.md
+  - https://raw.githubusercontent.com/modelcontextprotocol/servers/main/src/time/src/mcp_server_time/server.py
+  version: modelcontextprotocol/servers@51b6382a
+  status: active
+tools:
+- name: get_current_time
+  class: R0
+  rationale: Computes a value.
+  review: draft
+- name: convert_time
+  class: R0
+  rationale: Computes a value.
+  review: draft

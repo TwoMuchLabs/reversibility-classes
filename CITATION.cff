@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this specification or registry, please cite it as below."
+title: "Reversibility Classes for Agent Actions"
+abstract: "A five-level classification (R0-R4) of how recoverable an AI agent's tool call is, with an open registry of MCP server tools and a reference classifier."
+authors:
+  - family-names: Waghmare
+    given-names: Deepak
+version: 0.1.0
+date-released: 2026-10-22
+license: CC-BY-4.0
+repository-code: "https://github.com/waghmaredb/reversibility-classes"
+keywords:
+  - ai-agents
+  - model-context-protocol
+  - ai-governance
+  - agent-autonomy
+  - reversibility

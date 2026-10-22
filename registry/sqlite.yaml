@@ -1,0 +1,46 @@
+# Reversibility Classes — SQLite (archived MCP reference server)
+# Tool names verified against the evidence URLs below. Classes are drafts until reviewed.
+spec_version: '0.1'
+server:
+  id: sqlite
+  name: SQLite (archived MCP reference server)
+  source: https://github.com/modelcontextprotocol/servers-archived/tree/main/src/sqlite
+  evidence:
+  - https://raw.githubusercontent.com/modelcontextprotocol/servers-archived/main/src/sqlite/README.md
+  - https://raw.githubusercontent.com/modelcontextprotocol/servers-archived/main/src/sqlite/src/mcp_server_sqlite/server.py
+  version: modelcontextprotocol/servers-archived@9be4674d
+  status: archived
+  notes: Archived. The README names describe-table; the server registers describe_table. write_query accepts
+    any statement not starting with SELECT.
+tools:
+- name: read_query
+  class: R0
+  rationale: The server rejects statements that do not start with SELECT.
+  review: draft
+- name: write_query
+  class: R4
+  rationale: Accepts any non-SELECT statement, including UPDATE, DELETE and DROP, which destroy prior
+    values.
+  when:
+  - arg: query
+    matches: '^\s*INSERT\b[^;]*;?\s*$'
+    class: R1
+    rationale: A single insert is restored by deleting the inserted rows.
+  review: draft
+- name: create_table
+  class: R1
+  rationale: A new table can be dropped to restore the prior state.
+  compensation: DROP TABLE
+  review: draft
+- name: list_tables
+  class: R0
+  rationale: Reads the schema.
+  review: draft
+- name: describe_table
+  class: R0
+  rationale: Reads the schema.
+  review: draft
+- name: append_insight
+  class: R1
+  rationale: Appends to an in-memory memo resource visible only to the client for the session.
+  review: draft

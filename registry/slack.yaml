@@ -1,0 +1,50 @@
+# Reversibility Classes — Slack (archived MCP reference server)
+# Tool names verified against the evidence URLs below. Classes are drafts until reviewed.
+spec_version: '0.1'
+server:
+  id: slack
+  name: Slack (archived MCP reference server)
+  source: https://github.com/modelcontextprotocol/servers-archived/tree/main/src/slack
+  evidence:
+  - https://raw.githubusercontent.com/modelcontextprotocol/servers-archived/main/src/slack/README.md
+  - https://raw.githubusercontent.com/modelcontextprotocol/servers-archived/main/src/slack/index.ts
+  version: modelcontextprotocol/servers-archived@9be4674d
+  status: archived
+  notes: Archived. The server has no edit or delete tools.
+tools:
+- name: slack_list_channels
+  class: R0
+  rationale: Reads workspace data.
+  review: draft
+- name: slack_post_message
+  class: R4
+  rationale: Posts a message other people see and are notified of; deleting it later does not un-send
+    it.
+  disclosure: true
+  review: draft
+- name: slack_reply_to_thread
+  class: R4
+  rationale: Posts a reply other people see and are notified of.
+  disclosure: true
+  review: draft
+- name: slack_add_reaction
+  class: R4
+  rationale: A reaction is visible to channel members and cannot be removed through this server.
+  disclosure: true
+  review: draft
+- name: slack_get_channel_history
+  class: R0
+  rationale: Reads messages.
+  review: draft
+- name: slack_get_thread_replies
+  class: R0
+  rationale: Reads messages.
+  review: draft
+- name: slack_get_users
+  class: R0
+  rationale: Reads the user list.
+  review: draft
+- name: slack_get_user_profile
+  class: R0
+  rationale: Reads a profile.
+  review: draft

@@ -1,0 +1,32 @@
+name: Classification dispute
+description: You think a tool has the wrong Reversibility Class.
+labels: ["classification"]
+body:
+  - type: input
+    id: tool
+    attributes:
+      label: Server and tool
+      placeholder: "github / merge_pull_request"
+    validations:
+      required: true
+  - type: dropdown
+    id: current
+    attributes:
+      label: Current class
+      options: [R0, R1, R2, R3, R4]
+    validations:
+      required: true
+  - type: dropdown
+    id: proposed
+    attributes:
+      label: Proposed class
+      options: [R0, R1, R2, R3, R4]
+    validations:
+      required: true
+  - type: textarea
+    id: reason
+    attributes:
+      label: Why
+      description: What does the tool actually do, and what would it take to undo it? Link to source code if you can.
+    validations:
+      required: true

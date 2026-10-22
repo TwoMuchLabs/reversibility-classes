@@ -1,0 +1,20 @@
+# Reversibility Classes — Sequential Thinking (MCP reference server)
+# Tool names verified against the evidence URLs below. Classes are drafts until reviewed.
+spec_version: '0.1'
+server:
+  id: sequentialthinking
+  name: Sequential Thinking (MCP reference server)
+  source: https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking
+  evidence:
+  - https://raw.githubusercontent.com/modelcontextprotocol/servers/main/src/sequentialthinking/README.md
+  - https://raw.githubusercontent.com/modelcontextprotocol/servers/main/src/sequentialthinking/index.ts
+  version: modelcontextprotocol/servers@51b6382a
+  status: active
+  notes: The README names the tool sequential_thinking; the server registers it as sequentialthinking.
+    This record uses the registered name.
+tools:
+- name: sequentialthinking
+  class: R0
+  rationale: Records a reasoning step in per-connection memory; no effect outside the agent's working
+    context.
+  review: draft

@@ -1,0 +1,52 @@
+# Reversibility Classes — Puppeteer (archived MCP reference server)
+# Tool names verified against the evidence URLs below. Classes are drafts until reviewed.
+spec_version: '0.1'
+server:
+  id: puppeteer
+  name: Puppeteer (archived MCP reference server)
+  source: https://github.com/modelcontextprotocol/servers-archived/tree/main/src/puppeteer
+  evidence:
+  - https://raw.githubusercontent.com/modelcontextprotocol/servers-archived/main/src/puppeteer/README.md
+  - https://raw.githubusercontent.com/modelcontextprotocol/servers-archived/main/src/puppeteer/index.ts
+  version: modelcontextprotocol/servers-archived@9be4674d
+  status: archived
+  notes: Archived. What a click, keystroke or script does depends entirely on the page. Deployments that
+    restrict the browser to allow-listed sites can override.
+tools:
+- name: puppeteer_navigate
+  class: R3
+  rationale: With allowDangerous, launch options can disable browser security protections.
+  when:
+  - arg: allowDangerous
+    absent: true
+    class: R0
+    rationale: Navigation only; reads a page.
+  - arg: allowDangerous
+    equals: false
+    class: R0
+    rationale: Navigation only; reads a page.
+  review: draft
+- name: puppeteer_screenshot
+  class: R0
+  rationale: Captures the page into a server-side resource.
+  review: draft
+- name: puppeteer_click
+  class: R4
+  rationale: A click can submit a form, make a purchase or send a message; the effect depends on the page.
+  review: draft
+- name: puppeteer_fill
+  class: R4
+  rationale: Typed values can be transmitted by the page as they are entered.
+  review: draft
+- name: puppeteer_select
+  class: R4
+  rationale: A selection can trigger page actions, including submissions.
+  review: draft
+- name: puppeteer_hover
+  class: R0
+  rationale: Hovering has no intended effect beyond the page view.
+  review: draft
+- name: puppeteer_evaluate
+  class: R4
+  rationale: Runs arbitrary JavaScript in the page, which can do anything the page can.
+  review: draft

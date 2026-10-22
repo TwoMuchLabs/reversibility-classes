@@ -1,0 +1,54 @@
+# Reversibility Classes — Memory / knowledge graph (MCP reference server)
+# Tool names verified against the evidence URLs below. Classes are drafts until reviewed.
+spec_version: '0.1'
+server:
+  id: memory
+  name: Memory / knowledge graph (MCP reference server)
+  source: https://github.com/modelcontextprotocol/servers/tree/main/src/memory
+  evidence:
+  - https://raw.githubusercontent.com/modelcontextprotocol/servers/main/src/memory/README.md
+  - https://raw.githubusercontent.com/modelcontextprotocol/servers/main/src/memory/index.ts
+  version: modelcontextprotocol/servers@51b6382a
+  status: active
+  notes: Stores the graph in a local file (MEMORY_FILE_PATH) with no history. Deployments that back up
+    that file can override the delete tools.
+tools:
+- name: create_entities
+  class: R1
+  rationale: New entities can be deleted; existing names are skipped, not overwritten.
+  compensation: delete_entities
+  review: draft
+- name: create_relations
+  class: R1
+  rationale: New relations can be deleted.
+  compensation: delete_relations
+  review: draft
+- name: add_observations
+  class: R1
+  rationale: Added observations can be deleted.
+  compensation: delete_observations
+  review: draft
+- name: delete_entities
+  class: R4
+  rationale: Permanently removes entities and their relations; the server keeps no history.
+  review: draft
+- name: delete_observations
+  class: R4
+  rationale: Permanently removes observations; the server keeps no history.
+  review: draft
+- name: delete_relations
+  class: R4
+  rationale: Permanently removes relations; the server keeps no history.
+  review: draft
+- name: read_graph
+  class: R0
+  rationale: Reads the graph.
+  review: draft
+- name: search_nodes
+  class: R0
+  rationale: Searches the graph.
+  review: draft
+- name: open_nodes
+  class: R0
+  rationale: Reads nodes.
+  review: draft

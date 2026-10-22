@@ -1,0 +1,19 @@
+# Reversibility Classes — Fetch (MCP reference server)
+# Tool names verified against the evidence URLs below. Classes are drafts until reviewed.
+spec_version: '0.1'
+server:
+  id: fetch
+  name: Fetch (MCP reference server)
+  source: https://github.com/modelcontextprotocol/servers/tree/main/src/fetch
+  evidence:
+  - https://raw.githubusercontent.com/modelcontextprotocol/servers/main/src/fetch/README.md
+  - https://raw.githubusercontent.com/modelcontextprotocol/servers/main/src/fetch/src/mcp_server_fetch/server.py
+  version: modelcontextprotocol/servers@51b6382a
+  status: active
+  notes: An outbound GET can carry data in its URL to the remote host. That is an aggregation concern
+    (SPEC section 9), not a property of this tool alone.
+tools:
+- name: fetch
+  class: R0
+  rationale: Retrieves a URL; its intended effect is reading.
+  review: draft

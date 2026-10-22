@@ -1,0 +1,82 @@
+# Reversibility Classes — Filesystem (MCP reference server)
+# Tool names verified against the evidence URLs below. Classes are drafts until reviewed.
+spec_version: '0.1'
+server:
+  id: filesystem
+  name: Filesystem (MCP reference server)
+  source: https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem
+  evidence:
+  - https://raw.githubusercontent.com/modelcontextprotocol/servers/main/src/filesystem/README.md
+  - https://raw.githubusercontent.com/modelcontextprotocol/servers/main/src/filesystem/server.ts
+  version: modelcontextprotocol/servers@51b6382a
+  status: active
+  notes: Access is limited to the directories the server is started with. Overwrites keep no backup; deployments
+    that run it inside a version-controlled or snapshotted workspace can override write_file to R1.
+tools:
+- name: read_text_file
+  class: R0
+  rationale: Reads a file.
+  review: draft
+- name: read_media_file
+  class: R0
+  rationale: Reads a file.
+  review: draft
+- name: read_multiple_files
+  class: R0
+  rationale: Reads files.
+  review: draft
+- name: write_file
+  class: R4
+  rationale: Creates or silently overwrites a file; the server keeps no copy of the previous content,
+    so an overwrite cannot be restored.
+  review: draft
+- name: edit_file
+  class: R1
+  rationale: The tool returns a diff of every edit, so the previous content can be restored by applying
+    the inverse edits.
+  when:
+  - arg: dryRun
+    equals: true
+    class: R0
+    rationale: A dry run only previews the diff.
+  compensation: edit_file with the inverse edits
+  review: draft
+- name: create_directory
+  class: R1
+  rationale: A new directory can be removed; existing directories are left untouched.
+  compensation: remove the directory
+  review: draft
+- name: list_directory
+  class: R0
+  rationale: Lists a directory.
+  review: draft
+- name: list_directory_with_sizes
+  class: R0
+  rationale: Lists a directory.
+  review: draft
+- name: move_file
+  class: R1
+  rationale: Fails if the destination exists, so nothing is overwritten; moving it back restores the prior
+    state.
+  compensation: move_file back to the original path
+  review: draft
+- name: search_files
+  class: R0
+  rationale: Searches file names.
+  review: draft
+- name: directory_tree
+  class: R0
+  rationale: Lists a directory tree.
+  review: draft
+- name: get_file_info
+  class: R0
+  rationale: Reads metadata.
+  review: draft
+- name: list_allowed_directories
+  class: R0
+  rationale: Reads server configuration.
+  review: draft
+- name: read_file
+  class: R0
+  rationale: Deprecated alias of read_text_file; reads a file.
+  review: draft
