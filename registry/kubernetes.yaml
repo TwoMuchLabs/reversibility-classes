@@ -1,0 +1,380 @@
+# Reversibility Classes — Kubernetes (containers/kubernetes-mcp-server)
+# Tool names verified against the evidence URLs below. Classes are drafts until reviewed.
+spec_version: '0.1'
+server:
+  id: kubernetes
+  name: Kubernetes (containers/kubernetes-mcp-server)
+  source: https://github.com/containers/kubernetes-mcp-server
+  evidence:
+  - https://raw.githubusercontent.com/containers/kubernetes-mcp-server/main/README.md
+  - https://github.com/containers/kubernetes-mcp-server/tree/main/pkg/toolsets
+  - https://github.com/containers/kubernetes-mcp-server/blob/main/pkg/config/config.go
+  version: containers/kubernetes-mcp-server@c500ad10
+  status: active
+  notes: Only the config and core toolsets are enabled by default. read_only=true exposes only readOnlyHint
+    tools and disable_destructive=true removes destructiveHint tools; denied_resources blocks sensitive
+    kinds. These modes do not change per-tool classes. Every tool also takes a context argument selecting
+    the cluster.
+tools:
+- name: configuration_contexts_list
+  class: R0
+  rationale: Reads kubeconfig contexts.
+  review: draft
+- name: targets_list
+  class: R0
+  rationale: Lists clusters and contexts.
+  review: draft
+- name: configuration_view
+  class: R0
+  rationale: Reads the kubeconfig.
+  review: draft
+- name: events_list
+  class: R0
+  rationale: Lists events.
+  review: draft
+- name: namespaces_list
+  class: R0
+  rationale: Lists namespaces.
+  review: draft
+- name: projects_list
+  class: R0
+  rationale: Lists OpenShift projects.
+  review: draft
+- name: nodes_log
+  class: R0
+  rationale: Reads node logs.
+  review: draft
+- name: nodes_stats_summary
+  class: R0
+  rationale: Reads node statistics.
+  review: draft
+- name: nodes_top
+  class: R0
+  rationale: Reads node resource usage.
+  review: draft
+- name: pods_list
+  class: R0
+  rationale: Lists pods.
+  review: draft
+- name: pods_list_in_namespace
+  class: R0
+  rationale: Lists pods.
+  review: draft
+- name: pods_get
+  class: R0
+  rationale: Reads a pod.
+  review: draft
+- name: pods_delete
+  class: R3
+  rationale: A controller-managed pod is recreated by its controller; a bare pod must be recreated from
+    its manifest, and the deletion interrupts its workload.
+  review: draft
+- name: pods_top
+  class: R0
+  rationale: Reads pod resource usage.
+  review: draft
+- name: pods_exec
+  class: R4
+  rationale: Runs an arbitrary command inside a container, which can do anything the container can.
+  review: draft
+- name: pods_log
+  class: R0
+  rationale: Reads container logs.
+  review: draft
+- name: pods_run
+  class: R4
+  rationale: Starts an arbitrary image whose container runs its own code with the namespace's service
+    account and network access; force apply overwrites a same-named Pod or Service, and on OpenShift a
+    port also creates a public Route.
+  review: draft
+- name: resources_list
+  class: R0
+  rationale: Lists resources.
+  review: draft
+- name: resources_get
+  class: R0
+  rationale: Reads a resource.
+  review: draft
+- name: resources_create_or_update
+  class: R4
+  rationale: Server-side applies any manifest, which can overwrite Secrets, ConfigMaps, RBAC or any other
+    object, and the previous content is not returned.
+  review: draft
+- name: resources_delete
+  class: R4
+  rationale: Deletes any kind, including Secrets, PersistentVolumeClaims and Namespaces, whose data has
+    no recovery path in the cluster.
+  when:
+  - all:
+    - arg: apiVersion
+      equals: apps/v1
+    - arg: kind
+      in:
+      - Deployment
+      - ReplicaSet
+      - DaemonSet
+      - StatefulSet
+    class: R3
+    rationale: A workload controller can be recreated from its manifest, but its pods stop; StatefulSet
+      PVCs are kept.
+  - all:
+    - arg: apiVersion
+      equals: v1
+    - arg: kind
+      in:
+      - Pod
+      - Service
+    class: R3
+    rationale: A Pod or Service can be recreated from its manifest, but traffic or the workload is interrupted
+      and a Service may get new IPs.
+  review: draft
+- name: resources_scale
+  class: R3
+  rationale: Setting the scale changes availability; scaling to zero stops the workload.
+  when:
+  - arg: scale
+    absent: true
+    class: R0
+    rationale: Without scale the tool only reads the current scale.
+  review: draft
+- name: helm_install
+  class: R4
+  rationale: Installs arbitrary chart manifests, including RBAC and hook Jobs that run their own code
+    during installation.
+  review: draft
+- name: helm_list
+  class: R0
+  rationale: Lists Helm releases.
+  review: draft
+- name: helm_uninstall
+  class: R4
+  rationale: Deletes every resource in the release, including any Secrets and PersistentVolumeClaims the
+    chart templates, whose data is gone.
+  review: draft
+- name: kcp_workspaces_list
+  class: R0
+  rationale: Lists kcp workspaces.
+  review: draft
+- name: kcp_workspace_describe
+  class: R0
+  rationale: Reads a kcp workspace.
+  review: draft
+- name: kiali_get_mesh_traffic_graph
+  class: R0
+  rationale: Reads the mesh traffic graph.
+  review: draft
+- name: kiali_get_mesh_status
+  class: R0
+  rationale: Reads mesh status.
+  review: draft
+- name: kiali_manage_istio_config_read
+  class: R0
+  rationale: Lists or reads Istio config objects.
+  review: draft
+- name: kiali_manage_istio_config
+  class: R3
+  rationale: Creating, patching or deleting routing and AuthorizationPolicy or PeerAuthentication objects
+    changes traffic availability and access rules for the mesh.
+  review: draft
+- name: kiali_list_mesh_clusters
+  class: R0
+  rationale: Lists mesh clusters.
+  review: draft
+- name: kiali_get_resource_details
+  class: R0
+  rationale: Reads mesh resources.
+  review: draft
+- name: kiali_list_traces
+  class: R0
+  rationale: Lists traces.
+  review: draft
+- name: kiali_get_trace_details
+  class: R0
+  rationale: Reads a trace.
+  review: draft
+- name: kiali_get_pod_performance
+  class: R0
+  rationale: Reads pod usage.
+  review: draft
+- name: kiali_get_logs
+  class: R0
+  rationale: Reads logs.
+  review: draft
+- name: kiali_get_metrics
+  class: R0
+  rationale: Reads metrics.
+  review: draft
+- name: vm_clone
+  class: R1
+  rationale: Creates a new VM from an existing one, leaving the source untouched; the clone can be deleted.
+  compensation: delete the cloned VirtualMachine
+  review: draft
+- name: vm_console_screenshot
+  class: R0
+  rationale: Captures the VM console image.
+  review: draft
+- name: vm_create
+  class: R2
+  rationale: Creates the VM by force server-side apply, so a same-named VM's spec is overwritten; the
+    old spec was readable beforehand and can be applied again.
+  compensation: delete the new VirtualMachine, or re-apply the previous spec
+  review: draft
+- name: vm_guest_info
+  class: R0
+  rationale: Reads guest-agent information.
+  review: draft
+- name: vm_lifecycle
+  class: R3
+  rationale: Stopping, restarting or pausing a VM interrupts its workload and loses in-memory state on
+    stop or restart.
+  when:
+  - arg: action
+    in:
+    - start
+    - unpause
+    class: R1
+    rationale: Starting or unpausing a VM is undone by stopping or pausing it again.
+  review: draft
+- name: vm_create_from_template
+  class: R1
+  rationale: Creates a new VM from a template, which can be deleted; nothing existing is changed.
+  compensation: delete the VirtualMachine
+  review: draft
+- name: vm_troubleshoot
+  class: R0
+  rationale: Reads VM diagnostics.
+  review: draft
+- name: netobserv_list_flows
+  class: R0
+  rationale: Lists flow records.
+  review: draft
+- name: netobserv_export_flows
+  class: R0
+  rationale: Returns flow records as CSV.
+  review: draft
+- name: netobserv_get_flow_metrics
+  class: R0
+  rationale: Reads flow metrics.
+  review: draft
+- name: loki_list_instances
+  class: R0
+  rationale: Lists LokiStack instances.
+  review: draft
+- name: loki_label_names
+  class: R0
+  rationale: Reads label names.
+  review: draft
+- name: loki_label_values
+  class: R0
+  rationale: Reads label values.
+  review: draft
+- name: loki_query_range
+  class: R0
+  rationale: Runs a LogQL query.
+  review: draft
+- name: list_metrics
+  class: R0
+  rationale: Lists metric names.
+  review: draft
+- name: execute_instant_query
+  class: R0
+  rationale: Runs a PromQL query.
+  review: draft
+- name: execute_range_query
+  class: R0
+  rationale: Runs a PromQL query.
+  review: draft
+- name: show_timeseries
+  class: R0
+  rationale: Renders a PromQL result.
+  review: draft
+- name: get_label_names
+  class: R0
+  rationale: Reads label names.
+  review: draft
+- name: get_label_values
+  class: R0
+  rationale: Reads label values.
+  review: draft
+- name: get_series
+  class: R0
+  rationale: Lists series.
+  review: draft
+- name: get_alerts
+  class: R0
+  rationale: Reads alerts.
+  review: draft
+- name: get_silences
+  class: R0
+  rationale: Reads silences.
+  review: draft
+- name: otelcol_list_components
+  class: R0
+  rationale: Lists components.
+  review: draft
+- name: otelcol_get_component_schema
+  class: R0
+  rationale: Reads a schema.
+  review: draft
+- name: otelcol_validate_config
+  class: R0
+  rationale: Validates a config against a schema; computes a value.
+  review: draft
+- name: otelcol_get_versions
+  class: R0
+  rationale: Lists versions.
+  review: draft
+- name: tempo_list_instances
+  class: R0
+  rationale: Lists Tempo instances.
+  review: draft
+- name: tempo_get_trace_by_id
+  class: R0
+  rationale: Reads a trace.
+  review: draft
+- name: tempo_search_traces
+  class: R0
+  rationale: Searches traces.
+  review: draft
+- name: tempo_search_tags
+  class: R0
+  rationale: Lists tag names.
+  review: draft
+- name: tempo_search_tag_values
+  class: R0
+  rationale: Lists tag values.
+  review: draft
+- name: tekton_pipeline_start
+  class: R4
+  rationale: Runs a Pipeline whose steps can do anything its definition and service account allow, such
+    as deploying, pushing or deleting.
+  review: draft
+- name: tekton_pipelinerun_lifecycle
+  class: R4
+  rationale: Restart runs the PipelineRun's steps again, which can do anything its definition and service
+    account allow.
+  when:
+  - arg: action
+    equals: cancel
+    class: R3
+    rationale: Cancelling stops a run part-way, leaving whatever its finished steps did; it cannot be
+      resumed.
+  review: draft
+- name: tekton_pipelinerun_logs
+  class: R0
+  rationale: Reads PipelineRun logs.
+  review: draft
+- name: tekton_task_start
+  class: R4
+  rationale: Runs a Task whose steps can do anything its definition and service account allow, such as
+    deploying, pushing or deleting.
+  review: draft
+- name: tekton_taskrun_restart
+  class: R4
+  rationale: Runs the TaskRun's steps again, which can do anything its definition and service account
+    allow.
+  review: draft
+- name: tekton_taskrun_logs
+  class: R0
+  rationale: Reads TaskRun logs.
+  review: draft

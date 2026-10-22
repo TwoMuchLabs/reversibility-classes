@@ -1,0 +1,326 @@
+# Reversibility Classes — Terraform (HashiCorp MCP server)
+# Tool names verified against the evidence URLs below. Classes are drafts until reviewed.
+spec_version: '0.1'
+server:
+  id: terraform
+  name: Terraform (HashiCorp MCP server)
+  source: https://github.com/hashicorp/terraform-mcp-server
+  evidence:
+  - https://github.com/hashicorp/terraform-mcp-server/blob/main/pkg/toolsets/registry.go
+  - https://raw.githubusercontent.com/hashicorp/terraform-mcp-server/main/README.md
+  - https://github.com/hashicorp/terraform-mcp-server/tree/main/pkg/tools
+  - https://github.com/hashicorp/terraform-mcp-server/tree/main/pkg/mcp-official/tools
+  version: hashicorp/terraform-mcp-server@07945528
+  status: active
+  notes: ENABLE_TF_OPERATIONS=true (default false) registers action_run, delete_project, delete_team,
+    delete_workspace_safely and force_unlock_workspace, and lets create_run accept run_type auto_approve
+    and is_destroy; classes assume it is on. is_destroy and auto_approve are run_type values, not separate
+    arguments. There is no read-only flag beyond leaving the terraform toolset off.
+tools:
+- name: search_provider_docs
+  class: R0
+  rationale: Searches public registry documentation.
+  review: draft
+- name: get_provider_details
+  class: R0
+  rationale: Reads a documentation page.
+  review: draft
+- name: get_latest_provider_version
+  class: R0
+  rationale: Reads registry metadata.
+  review: draft
+- name: get_provider_capabilities
+  class: R0
+  rationale: Reads registry metadata.
+  review: draft
+- name: search_modules
+  class: R0
+  rationale: Searches the public registry.
+  review: draft
+- name: get_module_details
+  class: R0
+  rationale: Reads module documentation.
+  review: draft
+- name: get_latest_module_version
+  class: R0
+  rationale: Reads registry metadata.
+  review: draft
+- name: search_policies
+  class: R0
+  rationale: Searches the public registry.
+  review: draft
+- name: get_policy_details
+  class: R0
+  rationale: Reads policy documentation.
+  review: draft
+- name: search_private_modules
+  class: R0
+  rationale: Searches the private registry.
+  review: draft
+- name: get_private_module_details
+  class: R0
+  rationale: Reads a private module.
+  review: draft
+- name: search_private_providers
+  class: R0
+  rationale: Searches the private registry.
+  review: draft
+- name: get_private_provider_details
+  class: R0
+  rationale: Reads a private provider.
+  review: draft
+- name: whoami
+  class: R0
+  rationale: Reads the token identity.
+  review: draft
+- name: get_token_permissions
+  class: R0
+  rationale: Reads token permissions.
+  review: draft
+- name: list_terraform_orgs
+  class: R0
+  rationale: Lists organizations.
+  review: draft
+- name: list_terraform_projects
+  class: R0
+  rationale: Lists projects.
+  review: draft
+- name: create_project
+  class: R1
+  rationale: A new project can be deleted with delete_project while it is empty.
+  compensation: delete_project
+  review: draft
+- name: get_project
+  class: R0
+  rationale: Reads a project.
+  review: draft
+- name: delete_project
+  class: R3
+  rationale: Only an empty project can be deleted, but its team access grants and settings are removed
+    and a recreated project gets a new ID, so access must be rebuilt by hand.
+  review: draft
+- name: list_teams
+  class: R0
+  rationale: Lists teams.
+  review: draft
+- name: get_team
+  class: R0
+  rationale: Reads a team.
+  review: draft
+- name: create_team
+  class: R1
+  rationale: A new team has no members or access and can be deleted.
+  compensation: delete_team
+  review: draft
+- name: add_team_member
+  class: R3
+  rationale: Adds a user to a team, which grants them the team's access rights.
+  review: draft
+- name: grant_team_access
+  class: R3
+  rationale: Grants a team access to a workspace or project, which changes access rights.
+  review: draft
+- name: delete_team
+  class: R3
+  rationale: Permanently deletes the team and removes its memberships and workspace and project access,
+    which changes access rights and must be rebuilt by hand.
+  review: draft
+- name: list_workspaces
+  class: R0
+  rationale: Lists workspaces.
+  review: draft
+- name: get_workspace_details
+  class: R0
+  rationale: Reads a workspace.
+  review: draft
+- name: create_workspace
+  class: R1
+  rationale: A new workspace manages no resources and can be deleted with delete_workspace_safely; no
+    run is queued.
+  compensation: delete_workspace_safely
+  review: draft
+- name: create_no_code_workspace
+  class: R3
+  rationale: No-code provisioning starts a run for the new workspace; with auto_apply true it provisions
+    infrastructure without confirmation.
+  when:
+  - arg: auto_apply
+    absent: true
+    class: R1
+    rationale: auto_apply defaults to false, so the run waits for confirmation and the workspace can be
+      deleted.
+  - arg: auto_apply
+    equals: false
+    class: R1
+    rationale: The run waits for confirmation and the workspace can be deleted.
+  compensation: discard the run and delete_workspace_safely
+  review: draft
+- name: update_workspace
+  class: R2
+  rationale: Overwrites workspace settings such as name, auto_apply and Terraform version; the previous
+    values are readable with get_workspace_details and can be set again.
+  compensation: update_workspace with the previous values
+  review: draft
+- name: delete_workspace_safely
+  class: R4
+  rationale: Deletes a workspace that manages no resources, together with its state history and variables;
+    sensitive variable values cannot be recovered.
+  review: draft
+- name: force_unlock_workspace
+  class: R3
+  rationale: Breaks a lock held by a run or user, which can let concurrent operations corrupt state; the
+    original lock cannot be restored.
+  review: draft
+- name: list_runs
+  class: R0
+  rationale: Lists runs.
+  review: draft
+- name: get_run_details
+  class: R0
+  rationale: Reads a run.
+  review: draft
+- name: get_run_comments
+  class: R0
+  rationale: Reads run comments.
+  review: draft
+- name: create_run
+  class: R4
+  rationale: With ENABLE_TF_OPERATIONS, run_type is_destroy queues a destroy run that, once applied (without
+    confirmation if the workspace auto-applies), removes every resource the workspace manages, including
+    data stores.
+  when:
+  - arg: run_type
+    equals: plan_only
+    class: R0
+    rationale: A speculative plan changes no infrastructure or state.
+  - arg: run_type
+    absent: true
+    class: R1
+    rationale: The default plan_and_apply sets auto-apply false, so the plan waits for confirmation and
+      can be discarded.
+  - arg: run_type
+    equals: plan_and_apply
+    class: R1
+    rationale: The tool sets auto-apply false, so the plan waits for confirmation and can be discarded.
+  - arg: run_type
+    in:
+    - refresh_state
+    - allow_empty_apply
+    - auto_approve
+    class: R3
+    rationale: The run can apply without confirmation (auto_approve, or the workspace auto-apply setting),
+      changing infrastructure or state.
+  review: draft
+- name: action_run
+  class: R4
+  rationale: Applying a destroy run removes every resource the workspace manages, including data stores.
+  when:
+  - arg: run_action
+    equals: discard
+    class: R1
+    rationale: Discarding an unapplied plan changes no infrastructure; a new run can be queued.
+  - arg: run_action
+    equals: cancel
+    class: R3
+    rationale: Cancelling an apply part-way can leave infrastructure and state partly changed.
+  review: draft
+- name: get_plan_details
+  class: R0
+  rationale: Reads a plan.
+  review: draft
+- name: get_plan_logs
+  class: R0
+  rationale: Reads plan logs.
+  review: draft
+- name: get_plan_json_output
+  class: R0
+  rationale: Reads plan output.
+  review: draft
+- name: get_apply_details
+  class: R0
+  rationale: Reads an apply.
+  review: draft
+- name: get_apply_logs
+  class: R0
+  rationale: Reads apply logs.
+  review: draft
+- name: get_sentinel_mock
+  class: R0
+  rationale: Creates a temporary plan export only to download its mock data; nothing else changes.
+  review: draft
+- name: list_workspace_variables
+  class: R0
+  rationale: Lists workspace variables.
+  review: draft
+- name: create_workspace_variable
+  class: R1
+  rationale: A new variable takes effect only on later runs and can be deleted in HCP Terraform.
+  compensation: delete the variable in HCP Terraform
+  review: draft
+- name: update_workspace_variable
+  class: R4
+  rationale: Overwrites the value; a sensitive variable's previous value cannot be read back, so it is
+    lost.
+  review: draft
+- name: list_variable_sets
+  class: R0
+  rationale: Lists variable sets.
+  review: draft
+- name: create_variable_set
+  class: R1
+  rationale: A new variable set has no variables and can be deleted.
+  compensation: delete the variable set in HCP Terraform
+  review: draft
+- name: create_variable_in_variable_set
+  class: R1
+  rationale: A new variable takes effect only on later runs and can be deleted.
+  compensation: delete_variable_in_variable_set
+  review: draft
+- name: delete_variable_in_variable_set
+  class: R4
+  rationale: Deletes the variable; a sensitive value cannot be read back, so it is lost.
+  review: draft
+- name: attach_variable_set_to_workspaces
+  class: R1
+  rationale: Attachment takes effect only on later runs and is undone by detaching.
+  compensation: detach_variable_set_from_workspaces
+  review: draft
+- name: detach_variable_set_from_workspaces
+  class: R1
+  rationale: Detachment takes effect only on later runs and is undone by attaching again.
+  compensation: attach_variable_set_to_workspaces
+  review: draft
+- name: create_workspace_tags
+  class: R1
+  rationale: Adds tags, which can be removed in HCP Terraform; existing tags are kept.
+  compensation: remove the tags in HCP Terraform
+  review: draft
+- name: read_workspace_tags
+  class: R0
+  rationale: Reads workspace tags.
+  review: draft
+- name: attach_policy_set_to_workspaces
+  class: R1
+  rationale: Attachment affects only later runs and is undone by detaching the policy set in HCP Terraform.
+  compensation: detach the policy set in HCP Terraform
+  review: draft
+- name: list_workspace_policy_sets
+  class: R0
+  rationale: Lists policy sets.
+  review: draft
+- name: list_stacks
+  class: R0
+  rationale: Lists Stacks.
+  review: draft
+- name: get_stack_details
+  class: R0
+  rationale: Reads a Stack.
+  review: draft
+- name: list_state_versions
+  class: R0
+  rationale: Lists state versions.
+  review: draft
+- name: get_state_version
+  class: R0
+  rationale: Reads a state version.
+  review: draft

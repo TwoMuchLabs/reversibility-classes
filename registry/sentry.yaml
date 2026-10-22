@@ -1,0 +1,453 @@
+# Reversibility Classes — Sentry (official MCP server)
+# Tool names verified against the evidence URLs below. Classes are drafts until reviewed.
+spec_version: '0.1'
+server:
+  id: sentry
+  name: Sentry (official MCP server)
+  source: https://github.com/getsentry/sentry-mcp
+  evidence:
+  - https://github.com/getsentry/sentry-mcp/blob/main/packages/mcp-core/src/toolDefinitions.json
+  - https://raw.githubusercontent.com/getsentry/sentry-mcp/main/README.md
+  - https://github.com/getsentry/sentry-mcp/tree/main/packages/mcp-core/src/tools/catalog
+  - https://github.com/getsentry/sentry-mcp/blob/main/packages/mcp-core/src/tools/surfaces.ts
+  version: getsentry/sentry-mcp@e4c8c562
+  status: active
+  notes: Only 15 tools are listed directly; the rest are catalog tools reached through search_sentry_tools
+    and execute_sentry_tool, so a gateway that only sees execute_sentry_tool must classify by its name
+    argument. Skills (--skills / ?skills=) gate which tools exist; there is no read-only flag, the closest
+    is enabling only the inspect and docs skills. AI-powered search tools send the query to the configured
+    LLM provider.
+tools:
+- name: add_issue_note
+  class: R4
+  rationale: Posts a human-visible comment to the issue's activity feed, which subscribers see and are
+    notified of.
+  disclosure: true
+  review: draft
+- name: add_team_to_project
+  class: R3
+  rationale: Grants a team access to a project, which changes access rights.
+  review: draft
+- name: analyze_issue_with_seer
+  class: R2
+  rationale: Starts a Seer analysis run on the issue; the run is recorded on the issue and consumes Seer
+    usage that cannot be returned, but no issue data changes.
+  review: draft
+- name: create_alert_rule
+  class: R2
+  rationale: A new Alert can be deleted with delete_alert_rule, but notifications it sends to its configured
+    actions before then cannot be recalled.
+  compensation: delete_alert_rule
+  review: draft
+- name: create_dsn
+  class: R3
+  rationale: Issues a new client key, a credential that lets anyone holding it send events into an existing
+    project until it is deactivated.
+  review: draft
+- name: create_metric_monitor
+  class: R2
+  rationale: A new monitor can be deleted, but issues and notifications it triggers before then cannot
+    be recalled.
+  compensation: delete_metric_monitor
+  review: draft
+- name: create_project
+  class: R1
+  rationale: A new project can be deleted in Sentry's project settings; nothing existing is changed.
+  compensation: delete the project in Sentry settings
+  review: draft
+- name: create_team
+  class: R1
+  rationale: A new team can be deleted in Sentry's team settings; nothing existing is changed.
+  compensation: delete the team in Sentry settings
+  review: draft
+- name: create_uptime_monitor
+  class: R4
+  rationale: Configures Sentry to send repeated HTTP requests with any method, headers and body to any
+    URL, which can change state on or transmit data to the target.
+  when:
+  - arg: method
+    absent: true
+    class: R2
+    rationale: The check uses the default GET; the monitor can be deleted, but active monitors consume
+      paid uptime quota.
+  - arg: method
+    in:
+    - GET
+    - HEAD
+    - OPTIONS
+    class: R2
+    rationale: A read-only HTTP method; the monitor can be deleted, but active monitors consume paid uptime
+      quota.
+  compensation: delete_uptime_monitor
+  review: draft
+- name: delete_alert_rule
+  class: R4
+  rationale: Permanently deletes the Alert; the server has no restore and the rule must be rebuilt by
+    hand.
+  review: draft
+- name: delete_metric_monitor
+  class: R4
+  rationale: Permanently deletes the monitor and, when present, its legacy metric alert and incident history.
+  review: draft
+- name: delete_monitor_environment
+  class: R4
+  rationale: The tool description states the deletion is irreversible; the environment's check-in history
+    is removed.
+  review: draft
+- name: delete_uptime_monitor
+  class: R4
+  rationale: The tool description states deletion cannot be undone; the monitor's check history is removed.
+  review: draft
+- name: execute_sentry_tool
+  class: R4
+  rationale: Runs any catalog tool, including permanent deletes and comment posting, with arbitrary arguments.
+  when:
+  - arg: name
+    in:
+    - find_alert_rules
+    - find_dashboards
+    - find_dsns
+    - find_metric_monitors
+    - find_monitors
+    - find_releases
+    - find_teams
+    - find_uptime_monitors
+    - get_agent_conversation_details
+    - get_ai_conversation_details
+    - get_alert_options
+    - get_alert_rule
+    - get_dashboard_details
+    - get_doc
+    - get_event_attachment
+    - get_event_stacktrace
+    - get_issue_activity
+    - get_issue_breadcrumbs
+    - get_issue_details
+    - get_issue_tag_values
+    - get_issue_user_reports
+    - get_latest_base_snapshot
+    - get_metric_monitor_details
+    - get_monitor_details
+    - get_profile
+    - get_profile_details
+    - get_release_details
+    - get_replay_details
+    - get_sentry_mcp_info
+    - get_snapshot
+    - get_snapshot_image
+    - get_span_details
+    - get_trace_details
+    - get_uptime_monitor_details
+    - search_agent_conversations
+    - search_ai_conversations
+    - search_docs
+    - search_events
+    - search_issue_events
+    - whoami
+    class: R0
+    rationale: Runs a read-only catalog tool.
+  - arg: name
+    in:
+    - create_project
+    - create_team
+    - link_issue
+    - onboarding_status_update
+    - unlink_issue
+    class: R1
+    rationale: Runs a catalog tool classed R1 in this record.
+  - arg: name
+    in:
+    - create_alert_rule
+    - create_metric_monitor
+    - update_alert_rule
+    - update_metric_monitor
+    - update_project
+    class: R2
+    rationale: Runs a catalog tool classed R2 in this record.
+  - arg: name
+    in:
+    - add_team_to_project
+    - create_dsn
+    - remove_team_from_project
+    - update_dsn
+    class: R3
+    rationale: Runs a catalog tool classed R3 in this record.
+  review: draft
+- name: find_alert_rules
+  class: R0
+  rationale: Lists alert rules.
+  review: draft
+- name: find_dashboards
+  class: R0
+  rationale: Lists dashboards.
+  review: draft
+- name: find_dropped_events
+  class: R0
+  rationale: Reads dropped-event statistics.
+  review: draft
+- name: find_dsns
+  class: R0
+  rationale: Lists a project's DSNs.
+  review: draft
+- name: find_metric_monitors
+  class: R0
+  rationale: Lists metric monitors.
+  review: draft
+- name: find_monitors
+  class: R0
+  rationale: Lists cron monitors.
+  review: draft
+- name: find_organizations
+  class: R0
+  rationale: Lists organizations.
+  review: draft
+- name: find_projects
+  class: R0
+  rationale: Lists projects.
+  review: draft
+- name: find_releases
+  class: R0
+  rationale: Lists releases.
+  review: draft
+- name: find_teams
+  class: R0
+  rationale: Lists teams.
+  review: draft
+- name: find_uptime_monitors
+  class: R0
+  rationale: Lists uptime monitors.
+  review: draft
+- name: get_agent_conversation_details
+  class: R0
+  rationale: Reads a conversation transcript.
+  review: draft
+- name: get_ai_conversation_details
+  class: R0
+  rationale: Deprecated alias of get_agent_conversation_details; reads a conversation transcript.
+  review: draft
+- name: get_alert_options
+  class: R0
+  rationale: Reads available alert actions, conditions and sources.
+  review: draft
+- name: get_alert_rule
+  class: R0
+  rationale: Reads an alert rule.
+  review: draft
+- name: get_dashboard_details
+  class: R0
+  rationale: Reads a dashboard.
+  review: draft
+- name: get_doc
+  class: R0
+  rationale: Reads a documentation page.
+  review: draft
+- name: get_event_attachment
+  class: R0
+  rationale: Downloads an event attachment.
+  review: draft
+- name: get_event_stacktrace
+  class: R0
+  rationale: Reads a stack trace.
+  review: draft
+- name: get_issue_activity
+  class: R0
+  rationale: Reads an issue's activity feed.
+  review: draft
+- name: get_issue_breadcrumbs
+  class: R0
+  rationale: Reads breadcrumbs.
+  review: draft
+- name: get_issue_details
+  class: R0
+  rationale: Reads an issue.
+  review: draft
+- name: get_issue_tag_values
+  class: R0
+  rationale: Reads tag statistics.
+  review: draft
+- name: get_issue_user_reports
+  class: R0
+  rationale: Reads user reports.
+  review: draft
+- name: get_latest_base_snapshot
+  class: R0
+  rationale: Reads snapshot images.
+  review: draft
+- name: get_metric_monitor_details
+  class: R0
+  rationale: Reads a metric monitor.
+  review: draft
+- name: get_monitor_details
+  class: R0
+  rationale: Reads a cron monitor.
+  review: draft
+- name: get_profile
+  class: R0
+  rationale: Reads and analyzes profiling data.
+  review: draft
+- name: get_profile_details
+  class: R0
+  rationale: Reads a profile.
+  review: draft
+- name: get_release_details
+  class: R0
+  rationale: Reads a release.
+  review: draft
+- name: get_replay_details
+  class: R0
+  rationale: Reads a replay.
+  review: draft
+- name: get_sentry_mcp_info
+  class: R0
+  rationale: Reads server information.
+  review: draft
+- name: get_sentry_resource
+  class: R0
+  rationale: Reads a resource.
+  review: draft
+- name: get_snapshot
+  class: R0
+  rationale: Reads a snapshot comparison.
+  review: draft
+- name: get_snapshot_image
+  class: R0
+  rationale: Reads a snapshot image.
+  review: draft
+- name: get_span_details
+  class: R0
+  rationale: Reads a span.
+  review: draft
+- name: get_trace_details
+  class: R0
+  rationale: Reads a trace.
+  review: draft
+- name: get_uptime_monitor_details
+  class: R0
+  rationale: Reads an uptime monitor and its checks.
+  review: draft
+- name: link_issue
+  class: R1
+  rationale: Adds a reference to an existing external ticket; it does not create a ticket and can be removed
+    with unlink_issue.
+  compensation: unlink_issue
+  review: draft
+- name: onboarding_status_update
+  class: R1
+  rationale: Updates operational progress state shown in Sentry's onboarding UI, which a later update
+    replaces.
+  review: draft
+- name: remove_team_from_project
+  class: R3
+  rationale: Revokes a team's access to a project, which changes access rights.
+  review: draft
+- name: search_agent_conversations
+  class: R0
+  rationale: Searches conversations.
+  review: draft
+- name: search_ai_conversations
+  class: R0
+  rationale: Deprecated alias of search_agent_conversations; searches conversations.
+  review: draft
+- name: search_docs
+  class: R0
+  rationale: Searches documentation.
+  review: draft
+- name: search_errors
+  class: R0
+  rationale: Searches error events.
+  review: draft
+- name: search_events
+  class: R0
+  rationale: Deprecated multi-dataset search; searches events.
+  review: draft
+- name: search_issue_events
+  class: R0
+  rationale: Searches an issue's events.
+  review: draft
+- name: search_issues
+  class: R0
+  rationale: Searches issues.
+  review: draft
+- name: search_logs
+  class: R0
+  rationale: Searches logs.
+  review: draft
+- name: search_metrics
+  class: R0
+  rationale: Searches metrics.
+  review: draft
+- name: search_profiles
+  class: R0
+  rationale: Searches profiles.
+  review: draft
+- name: search_replays
+  class: R0
+  rationale: Searches replays.
+  review: draft
+- name: search_sentry_tools
+  class: R0
+  rationale: Searches the tool catalog.
+  review: draft
+- name: search_traces
+  class: R0
+  rationale: Searches spans and traces.
+  review: draft
+- name: unlink_issue
+  class: R1
+  rationale: Removes a reference to an external ticket; the ticket is untouched and the link can be added
+    back with link_issue.
+  compensation: link_issue
+  review: draft
+- name: update_alert_rule
+  class: R2
+  rationale: Overwrites an Alert's settings; the previous settings are readable with get_alert_rule and
+    can be set again, but notifications sent meanwhile cannot be recalled.
+  compensation: update_alert_rule with the previous settings
+  review: draft
+- name: update_dsn
+  class: R3
+  rationale: Deactivating or rate-limiting a client key drops events from every client that uses it, and
+    events dropped meanwhile cannot be recovered.
+  review: draft
+- name: update_issue
+  class: R4
+  rationale: When reason is given, the tool posts it as a comment on the issue's activity feed.
+  disclosure: true
+  when:
+  - arg: reason
+    absent: true
+    class: R2
+    rationale: Status and assignment can be set back with update_issue, though assignment and resolution
+      notifications are already sent.
+  review: draft
+- name: update_metric_monitor
+  class: R2
+  rationale: Overwrites a monitor's settings; the previous settings are readable with get_metric_monitor_details
+    and can be set again.
+  compensation: update_metric_monitor with the previous settings
+  review: draft
+- name: update_project
+  class: R2
+  rationale: Overwrites the name, slug or platform; the previous values are readable and can be set again,
+    but URLs and integrations using the old slug break meanwhile.
+  compensation: update_project with the previous values
+  review: draft
+- name: update_uptime_monitor
+  class: R4
+  rationale: Can change the check to send repeated requests with any method, headers and body to any URL,
+    which can change state on or transmit data to the target.
+  when:
+  - arg: method
+    in:
+    - GET
+    - HEAD
+    - OPTIONS
+    class: R2
+    rationale: A read-only HTTP method; the previous settings are readable with get_uptime_monitor_details
+      and can be set again.
+  compensation: update_uptime_monitor with the previous settings
+  review: draft
+- name: whoami
+  class: R0
+  rationale: Reads the authenticated identity.
+  review: draft
