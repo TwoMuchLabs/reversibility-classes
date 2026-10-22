@@ -7,6 +7,7 @@ server:
   source: https://github.com/github/github-mcp-server
   evidence:
   - https://raw.githubusercontent.com/github/github-mcp-server/main/README.md
+  - https://github.com/github/github-mcp-server/blob/b98d115bbb080e9555466a96656ec4df605aea21/pkg/github/pullrequests.go
   version: github/github-mcp-server@b98d115b
   status: active
   notes: Covers the 96 tools in the README's generated Tools section, including 4 remote-server-only tools;
@@ -31,8 +32,9 @@ tools:
   when:
   - arg: method
     equals: cancel_workflow_run
-    class: R2
-    rationale: A cancelled run can be re-run, but steps it had already completed are not undone.
+    class: R3
+    rationale: Cancelling interrupts a run mid-way; steps already completed are not undone and partial
+      deployments may need manual repair.
   review: draft
 - name: get_job_logs
   class: R0
@@ -204,9 +206,11 @@ tools:
       equals: update
     - arg: body
       absent: true
+    - arg: title
+      absent: true
     class: R2
-    rationale: Title, state, labels, assignees, milestone, type and fields can be set back to their previous
-      values, which were readable before the change.
+    rationale: State, labels, assignees and similar fields can be set back to their previous values; no
+      new title or body text is published.
   compensation: issue_write update with the previous values
   review: draft
 - name: list_issue_fields
@@ -343,9 +347,19 @@ tools:
   rationale: Lists pull requests.
   review: draft
 - name: merge_pull_request
-  class: R2
-  rationale: A merge can be reverted with a revert commit, but it may already have triggered deployments
-    or been pulled by others.
+  class: R4
+  rationale: A custom commit title or message is published in the repository's history, which may be public;
+    the merge may also trigger deployments.
+  disclosure: true
+  when:
+  - all:
+    - arg: commit_title
+      absent: true
+    - arg: commit_message
+      absent: true
+    class: R2
+    rationale: With the default commit text nothing new is published; the merge can be reverted, though
+      it may already have triggered deployments.
   compensation: revert commit
   review: draft
 - name: pull_request_read
@@ -383,11 +397,14 @@ tools:
   rationale: Rewriting a pull request's body publishes new content to everyone who can see the repository.
   disclosure: true
   when:
-  - arg: body
-    absent: true
+  - all:
+    - arg: body
+      absent: true
+    - arg: title
+      absent: true
     class: R2
-    rationale: Title, base, draft state, reviewers and open/closed state can be set back to their previous
-      values, which were readable before the change.
+    rationale: State, labels, assignees and similar fields can be set back to their previous values; no
+      new title or body text is published.
   compensation: update_pull_request with the previous values
   review: draft
 - name: update_pull_request_branch
@@ -425,10 +442,10 @@ tools:
   compensation: delete_repository
   review: draft
 - name: delete_file
-  class: R2
-  rationale: The deletion is a commit and the file remains in history, so a follow-up commit restores
-    it, but the commit may already have triggered workflows or been pulled by others.
-  compensation: revert commit
+  class: R4
+  rationale: The deletion is a commit whose required message is published in the repository's history,
+    which may be public.
+  disclosure: true
   review: draft
 - name: delete_repository
   class: R4

@@ -146,6 +146,15 @@ def test_override_cannot_lower_disclosure(reg):
     assert classify("db", "send", registry=reg).rclass is RClass.R4
 
 
+def test_override_can_lower_disclosure_only_with_explicit_assertion(reg):
+    reg.add_override(
+        _override([{"name": "send", "class": "R1", "disclosure": False, "rationale": "Internal only."}]),
+        "agent can only reach a private sandbox",
+    )
+    c = classify("db", "send", registry=reg)
+    assert c.rclass is RClass.R1 and c.source == "override"
+
+
 def test_override_can_raise(reg):
     reg.add_override(_override([{"name": "read", "class": "R2", "rationale": "Sensitive."}]), "PII table")
     assert classify("db", "read", registry=reg).rclass is RClass.R2

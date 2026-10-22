@@ -146,9 +146,9 @@ tools:
   rationale: Reads an Edge Function's files.
   review: draft
 - name: deploy_edge_function
-  class: R3
-  rationale: Replaces a live function that starts serving at its public URL immediately and can set verify_jwt,
-    which decides whether callers must be authenticated.
+  class: R4
+  rationale: Deploys arbitrary code that serves publicly at once with the project's secrets, and the previous
+    version is not kept.
   review: draft
 - name: submit_feedback
   class: R4

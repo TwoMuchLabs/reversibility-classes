@@ -33,8 +33,9 @@ tools:
   review: draft
 - name: stripe_api_write
   class: R4
-  rationale: Calls any supported POST, PATCH, PUT or DELETE method, including refunds and other money
-    movement that cannot be recalled.
+  rationale: A generic write tool that reaches refunds and other money movement, and can send invoices
+    and emails to customers.
+  disclosure: true
   review: draft
 - name: get_stripe_account_info
   class: R0

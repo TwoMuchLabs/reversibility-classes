@@ -101,14 +101,10 @@ A `when` rule lowers or raises a tool's class for specific arguments. Rules are 
       matches: '^\s*SELECT\b[^;]*;?\s*$'
       class: R0
       rationale: A single SELECT statement.
-    - arg: query
-      matches: '^\s*INSERT\b[^;]*;?\s*$'
-      class: R1
-      rationale: A single insert is restored by deleting the inserted rows.
-    # UPDATE and DELETE stay at the base class: the old values are gone.
+    # No rule for INSERT: INSERT OR REPLACE and ON CONFLICT DO UPDATE overwrite rows.
 ```
 
-*(informative)* Pattern-matching SQL is weak evidence: a `SELECT` can still call functions with side effects, and a `WITH` clause can hide a `DELETE`. A registry **SHOULD** lower SQL to R0 only when the server itself enforces read-only execution (for example, a read-only transaction or a read-only database role), and say so in the rationale.
+*(informative)* Pattern-matching SQL is weak evidence. A `SELECT` can call functions with side effects, a `WITH` clause can hide a `DELETE`, an `INSERT` can be an upsert, and a server that wraps a query in a read-only transaction can be escaped by a query that begins with `COMMIT;` if the driver accepts several statements. A registry **SHOULD** lower SQL only to R0, only for a single statement (no `;` except a trailing one), and only when the server also enforces read-only execution, and say so in the rationale.
 
 Supported matchers in v0.1:
 
@@ -132,6 +128,8 @@ A **registry** is a collection of classification records. This repository mainta
 ### 5.5 Deployment overrides
 
 A deployment **MAY** publish an override record with the same shape, scoped to its environment, to raise any class or to lower a non-disclosure class with a stated reason (e.g. "nightly snapshot with 30-day retention"). Overrides **MUST** be logged with every decision they affect.
+
+Some tools are disclosures only because their destination *may* be public: a repository, a wiki page. An override **MAY** lower such a tool only by setting `disclosure: false` on its entry, which asserts that in this deployment the destination is readable by no one outside the principal (for example, "this agent can only reach private repositories"). The assertion and its reason **MUST** be logged with every decision. Without that explicit assertion, an override **MUST NOT** lower a disclosure tool.
 
 ## 6. Unclassified tools: fail closed
 

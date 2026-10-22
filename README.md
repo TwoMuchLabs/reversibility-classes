@@ -18,7 +18,7 @@ Refunding a $40,000 charge is expensive but recoverable: **R2**. A one-line mess
 
 - **MCP's tool hints are too coarse.** `readOnlyHint` and `destructiveHint` can't say *"compensable"* or *"this is a disclosure"*, and the MCP spec tells clients to treat them as untrusted anyway. This spec maps them conservatively (section 7) and lets an independent registry say more.
 - **Class is a fact about the action type, not a model's opinion.** A gateway can enforce it with no model in the decision path.
-- **Arguments matter.** The same `write_query` tool is R1 for a single `INSERT` and R4 for `DROP TABLE`. Records can say so with narrow, allow-listed rules.
+- **Arguments matter.** GitHub's `create_repository` is R1 when the repository is private, and R4 when it's public. Records can say so with narrow, allow-listed rules.
 - **Unknown means R4.** Unclassified tools fail closed.
 - **Audit-ready.** Logging the class and the rule behind every decision answers "which irreversible actions did this agent take, and who approved them?"
 
@@ -35,23 +35,23 @@ Read the full specification: **[SPEC.md](SPEC.md)** (v0.1, draft for comment).
 | [Fetch (MCP reference server)](registry/fetch.yaml) | 1 | 1 | · | · | · | · |
 | [Filesystem (MCP reference server)](registry/filesystem.yaml) | 14 | 10 | 3 | · | · | 1 |
 | [Git (MCP reference server)](registry/git.yaml) | 12 | 7 | 5 | · | · | · |
-| [GitHub (official MCP server)](registry/github.yaml) | 96 | 60 | 5 | 8 | 2 | 21 |
+| [GitHub (official MCP server)](registry/github.yaml) | 96 | 60 | 5 | 6 | 2 | 23 |
 | [Google Maps (archived MCP reference server)](registry/google-maps.yaml) | 7 | 7 | · | · | · | · |
-| [Kubernetes (containers/kubernetes-mcp-server)](registry/kubernetes.yaml) | 76 | 59 | 2 | 1 | 4 | 10 |
+| [Kubernetes (containers/kubernetes-mcp-server)](registry/kubernetes.yaml) | 76 | 59 | 2 | · | 4 | 11 |
 | [Memory / knowledge graph (MCP reference server)](registry/memory.yaml) | 9 | 3 | 3 | · | · | 3 |
-| [Notion (official self-hosted MCP server)](registry/notion.yaml) | 24 | 14 | 5 | 1 | · | 4 |
-| [Playwright MCP (Microsoft)](registry/playwright.yaml) | 72 | 30 | 17 | · | 10 | 15 |
-| [PostgreSQL (archived MCP reference server)](registry/postgres.yaml) | 1 | 1 | · | · | · | · |
-| [Puppeteer (archived MCP reference server)](registry/puppeteer.yaml) | 7 | 2 | · | · | 1 | 4 |
-| [Sentry (official MCP server)](registry/sentry.yaml) | 76 | 52 | 5 | 6 | 4 | 9 |
+| [Notion (official self-hosted MCP server)](registry/notion.yaml) | 24 | 14 | 1 | · | 1 | 8 |
+| [Playwright MCP (Microsoft)](registry/playwright.yaml) | 72 | 29 | 8 | · | 10 | 25 |
+| [PostgreSQL (archived MCP reference server)](registry/postgres.yaml) | 1 | · | · | · | · | 1 |
+| [Puppeteer (archived MCP reference server)](registry/puppeteer.yaml) | 7 | 2 | · | · | · | 5 |
+| [Sentry (official MCP server)](registry/sentry.yaml) | 76 | 52 | 5 | 4 | 4 | 11 |
 | [Sequential Thinking (MCP reference server)](registry/sequentialthinking.yaml) | 1 | 1 | · | · | · | · |
 | [Slack (archived MCP reference server)](registry/slack.yaml) | 8 | 5 | · | · | · | 3 |
 | [SQLite (archived MCP reference server)](registry/sqlite.yaml) | 6 | 3 | 2 | · | · | 1 |
 | [Stripe (official hosted MCP server)](registry/stripe.yaml) | 15 | 8 | 1 | 1 | · | 5 |
-| [Supabase (official MCP server)](registry/supabase.yaml) | 40 | 23 | 1 | 3 | 4 | 9 |
-| [Terraform (HashiCorp MCP server)](registry/terraform.yaml) | 61 | 39 | 10 | 1 | 6 | 5 |
+| [Supabase (official MCP server)](registry/supabase.yaml) | 40 | 23 | 1 | 3 | 3 | 10 |
+| [Terraform (HashiCorp MCP server)](registry/terraform.yaml) | 61 | 39 | 9 | 1 | 7 | 5 |
 | [Time (MCP reference server)](registry/time.yaml) | 2 | 2 | · | · | · | · |
-| **Total** | **536** | **335** | **59** | **21** | **31** | **90** |
+| **Total** | **536** | **333** | **45** | **15** | **31** | **112** |
 <!-- registry-stats:end -->
 
 Every record links to the exact README or source file the tool names were verified against. Every class carries a one-sentence rationale. Entries start as `draft` and become `reviewed` or `verified` as people check them; see [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -60,9 +60,10 @@ A few classifications worth arguing about:
 
 - `filesystem/write_file` is **R4**: it overwrites without keeping the old content. `edit_file` is **R1**, because it returns a diff you can invert.
 - `slack/slack_add_reaction` is **R4**: other people see it, and the server can't remove it.
-- `postgres/query` is **R0**: the server forces a read-only transaction and rolls it back.
+- `postgres/query` is **R4** unless the query is a single `SELECT`. The server wraps every query in a read-only transaction, but a query that starts with `COMMIT;` escapes it.
+- Every Playwright tool that accepts a `filename` is **R4** when one is given: an explicit filename is resolved against your workspace root, so it can overwrite your own files.
 
-Disagree? [Open a classification dispute](../../issues/new?template=classification-dispute.yml). That is the point.
+The registry has had one independent audit; the fixes are applied, and the [open questions](docs/open-classification-questions.md) it raised are waiting for opinions. Disagree with a class? [Open a classification dispute](../../issues/new?template=classification-dispute.yml). That is the point.
 
 ## Use it
 

@@ -103,7 +103,10 @@ def classify(
             ov_entry, reason = ov
             ov_class, ov_rationale, ov_rule = _evaluate(ov_entry, args)
             disclosure = any(e.disclosure for e in entries)
-            if ov_class > rclass or (ov_class < rclass and not disclosure):
+            # A disclosure tool may be lowered only when the override explicitly asserts
+            # that, in this deployment, it reaches no one outside the principal (SPEC 5.5).
+            asserts_private = ov_entry.raw.get("disclosure") is False
+            if ov_class > rclass or (ov_class < rclass and (not disclosure or asserts_private)):
                 result = Classification(
                     ov_class, "override", f"{ov_rationale} (override: {reason})", server, tool, ov_rule
                 )

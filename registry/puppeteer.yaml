@@ -14,17 +14,18 @@ server:
     restrict the browser to allow-listed sites can override.
 tools:
 - name: puppeteer_navigate
-  class: R3
-  rationale: With allowDangerous, launch options can disable browser security protections.
+  class: R4
+  rationale: launchOptions can set the browser executable and launcher flags that run host commands; the
+    server's block-list of dangerous flags is incomplete and is bypassed by allowDangerous or the ALLOW_DANGEROUS
+    environment variable.
   when:
-  - arg: allowDangerous
-    absent: true
+  - all:
+    - arg: launchOptions
+      absent: true
+    - arg: allowDangerous
+      absent: true
     class: R0
-    rationale: Navigation only; reads a page.
-  - arg: allowDangerous
-    equals: false
-    class: R0
-    rationale: Navigation only; reads a page.
+    rationale: Navigation with the existing browser; reads a page.
   review: draft
 - name: puppeteer_screenshot
   class: R0

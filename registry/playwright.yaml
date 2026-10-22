@@ -30,15 +30,14 @@ tools:
   compensation: browser_navigate to the page again
   review: draft
 - name: browser_console_messages
-  class: R1
-  rationale: With a filename the messages are written to a file in the server's output directory, which
-    can simply be deleted.
+  class: R4
+  rationale: An explicit filename is resolved against the workspace root, not the output directory, so
+    it can overwrite an existing project file.
   when:
   - arg: filename
     absent: true
     class: R0
     rationale: Returns console messages without writing a file.
-  compensation: delete the written file
   review: draft
 - name: browser_drag
   class: R4
@@ -66,15 +65,14 @@ tools:
     submission.
   review: draft
 - name: browser_find
-  class: R1
-  rationale: With a filename the results are written to a file in the server's output directory, which
-    can simply be deleted.
+  class: R4
+  rationale: An explicit filename is resolved against the workspace root, not the output directory, so
+    it can overwrite an existing project file.
   when:
   - arg: filename
     absent: true
     class: R0
     rationale: Searches the snapshot without writing a file.
-  compensation: delete the written file
   review: draft
 - name: browser_handle_dialog
   class: R4
@@ -94,26 +92,24 @@ tools:
   rationale: Navigation only; returns to the previous page in history.
   review: draft
 - name: browser_network_request
-  class: R1
-  rationale: With a filename the request details are written to a file in the server's output directory,
-    which can simply be deleted.
+  class: R4
+  rationale: An explicit filename is resolved against the workspace root, not the output directory, so
+    it can overwrite an existing project file.
   when:
   - arg: filename
     absent: true
     class: R0
     rationale: Returns captured request details without writing a file.
-  compensation: delete the written file
   review: draft
 - name: browser_network_requests
-  class: R1
-  rationale: With a filename the request list is written to a file in the server's output directory, which
-    can simply be deleted.
+  class: R4
+  rationale: An explicit filename is resolved against the workspace root, not the output directory, so
+    it can overwrite an existing project file.
   when:
   - arg: filename
     absent: true
     class: R0
     rationale: Lists captured requests without writing a file.
-  compensation: delete the written file
   review: draft
 - name: browser_press_key
   class: R4
@@ -134,19 +130,25 @@ tools:
   rationale: A selection can trigger page actions, including submissions.
   review: draft
 - name: browser_snapshot
-  class: R1
-  rationale: With a filename the snapshot is written to a file in the server's output directory, which
-    can simply be deleted.
+  class: R4
+  rationale: An explicit filename is resolved against the workspace root, not the output directory, so
+    it can overwrite an existing project file.
   when:
   - arg: filename
     absent: true
     class: R0
     rationale: Returns the accessibility snapshot without writing a file.
-  compensation: delete the written file
   review: draft
 - name: browser_take_screenshot
-  class: R1
-  rationale: Writes an image file to the server's output directory, which can simply be deleted.
+  class: R4
+  rationale: Writes an image to a file; an explicit filename is resolved against the workspace root, so
+    it can overwrite an existing project file.
+  when:
+  - arg: filename
+    absent: true
+    class: R1
+    rationale: Without a filename the file gets a generated name in the output directory and can simply
+      be deleted.
   compensation: delete the written file
   review: draft
 - name: browser_type
@@ -261,9 +263,15 @@ tools:
     of sites not in the file; recovery is a fresh sign-in.
   review: draft
 - name: browser_storage_state
-  class: R1
-  rationale: Writes the cookies and storage, including sign-in tokens, to a local file that can simply
-    be deleted.
+  class: R4
+  rationale: Writes cookies and storage, including sign-in tokens, to a file; an explicit filename is
+    resolved against the workspace root, so it can overwrite an existing project file.
+  when:
+  - arg: filename
+    absent: true
+    class: R1
+    rationale: Without a filename the file gets a generated name in the output directory and can simply
+      be deleted.
   compensation: delete the written file
   review: draft
 - name: browser_annotate
@@ -279,8 +287,8 @@ tools:
   rationale: Draws an overlay on the page view.
   review: draft
 - name: browser_resume
-  class: R0
-  rationale: Lets paused page code continue as it would have run; the agent supplies no new input.
+  class: R4
+  rationale: Resumes a paused script, which can then click, type or submit anything on the page.
   review: draft
 - name: browser_start_recording
   class: R0
@@ -292,8 +300,15 @@ tools:
   compensation: delete the trace file
   review: draft
 - name: browser_start_video
-  class: R1
-  rationale: Starts a video recording that is written to a local file, which can simply be deleted.
+  class: R4
+  rationale: Writes a video to a file; an explicit filename is resolved against the workspace root, so
+    it can overwrite an existing project file.
+  when:
+  - arg: filename
+    absent: true
+    class: R1
+    rationale: Without a filename the file gets a generated name in the output directory and can simply
+      be deleted.
   compensation: delete the video file
   review: draft
 - name: browser_stop_recording
@@ -347,8 +362,15 @@ tools:
   rationale: Scrolling has no intended effect beyond the page view.
   review: draft
 - name: browser_pdf_save
-  class: R1
-  rationale: Writes a PDF file to the server's output directory, which can simply be deleted.
+  class: R4
+  rationale: Writes a PDF to a file; an explicit filename is resolved against the workspace root, so it
+    can overwrite an existing project file.
+  when:
+  - arg: filename
+    absent: true
+    class: R1
+    rationale: Without a filename the file gets a generated name in the output directory and can simply
+      be deleted.
   compensation: delete the written file
   review: draft
 - name: browser_generate_locator

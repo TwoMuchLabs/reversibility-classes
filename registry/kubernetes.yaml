@@ -113,10 +113,9 @@ tools:
       - Deployment
       - ReplicaSet
       - DaemonSet
-      - StatefulSet
     class: R3
-    rationale: A workload controller can be recreated from its manifest, but its pods stop; StatefulSet
-      PVCs are kept.
+    rationale: A stateless workload controller can be recreated from its manifest, but its pods stop.
+      StatefulSets are excluded because their retention policy can delete their volume claims.
   - all:
     - arg: apiVersion
       equals: v1
@@ -214,10 +213,9 @@ tools:
   rationale: Captures the VM console image.
   review: draft
 - name: vm_create
-  class: R2
-  rationale: Creates the VM by force server-side apply, so a same-named VM's spec is overwritten; the
-    old spec was readable beforehand and can be applied again.
-  compensation: delete the new VirtualMachine, or re-apply the previous spec
+  class: R4
+  rationale: Force-applies a VM that can boot any disk image URL and autostart it, overwriting a same-named
+    VM's spec without returning it.
   review: draft
 - name: vm_guest_info
   class: R0

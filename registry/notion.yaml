@@ -42,9 +42,10 @@ tools:
   rationale: Lists child blocks.
   review: draft
 - name: API-patch-block-children
-  class: R1
-  rationale: Appends new blocks and leaves existing blocks untouched; the new blocks can be deleted.
-  compensation: API-delete-a-block on each appended block
+  class: R4
+  rationale: Content created under a page shared to the web is published at once; a deployment whose workspace
+    has no public pages can override this.
+  disclosure: true
   review: draft
 - name: API-retrieve-a-block
   class: R0
@@ -52,22 +53,8 @@ tools:
   review: draft
 - name: API-update-a-block
   class: R4
-  rationale: Overwrites a block's text with no copy of the previous content kept or returned by the API.
-  when:
-  - all:
-    - arg: archived
-      equals: true
-    - arg: type
-      absent: true
-    class: R1
-    rationale: Only archives the block, which can be restored by un-archiving it.
-  - all:
-    - arg: archived
-      equals: false
-    - arg: type
-      absent: true
-    class: R1
-    rationale: Only restores an archived block, which can be archived again.
+  rationale: Overwrites block content and keeps no prior version; the proxy forwards arguments unchecked,
+    so no argument pattern safely limits it to archiving.
   review: draft
 - name: API-delete-a-block
   class: R1
@@ -79,39 +66,16 @@ tools:
   rationale: Reads page properties.
   review: draft
 - name: API-patch-page
-  class: R2
-  rationale: Overwrites page properties, icon or cover; the previous values were readable before the call
-    and can be set again.
-  when:
-  - all:
-    - arg: in_trash
-      equals: true
-    - arg: properties
-      absent: true
-    - arg: icon
-      absent: true
-    - arg: cover
-      absent: true
-    class: R1
-    rationale: Only moves the page to trash, from which it can be restored.
-  - all:
-    - arg: archived
-      equals: true
-    - arg: properties
-      absent: true
-    - arg: icon
-      absent: true
-    - arg: cover
-      absent: true
-    class: R1
-    rationale: Only archives the page, which can be restored.
+  class: R4
+  rationale: Overwrites page properties, including title and text content, and keeps no prior version;
+    the proxy forwards arguments unchecked.
   compensation: API-patch-page with the previous values, or with in_trash false
   review: draft
 - name: API-post-page
-  class: R1
-  rationale: Creates a new page inside the workspace and changes no existing content; the page can be
-    trashed.
-  compensation: API-patch-page with in_trash true
+  class: R4
+  rationale: Content created under a page shared to the web is published at once; a deployment whose workspace
+    has no public pages can override this.
+  disclosure: true
   review: draft
 - name: API-retrieve-a-page-property
   class: R0
@@ -146,9 +110,10 @@ tools:
       set again.
   review: draft
 - name: API-create-a-data-source
-  class: R1
-  rationale: Creates a new data source and changes no existing content; it can be trashed.
-  compensation: trash the new data source
+  class: R4
+  rationale: Content created under a page shared to the web is published at once; a deployment whose workspace
+    has no public pages can override this.
+  disclosure: true
   review: draft
 - name: API-list-data-source-templates
   class: R0
@@ -159,8 +124,8 @@ tools:
   rationale: Reads database metadata.
   review: draft
 - name: API-move-page
-  class: R1
-  rationale: Moving the page back to its previous parent restores its location and inherited permissions.
+  class: R3
+  rationale: A moved page inherits the permissions of its new parent, which changes who can access it.
   compensation: API-move-page back to the previous parent
   review: draft
 - name: API-retrieve-page-markdown

@@ -34,10 +34,15 @@ tools:
     usage that cannot be returned, but no issue data changes.
   review: draft
 - name: create_alert_rule
-  class: R2
-  rationale: A new Alert can be deleted with delete_alert_rule, but notifications it sends to its configured
-    actions before then cannot be recalled.
-  compensation: delete_alert_rule
+  class: R4
+  rationale: New alerts default to active and exist to send notifications to people and integrations,
+    which cannot be recalled.
+  disclosure: true
+  when:
+  - arg: status
+    equals: disabled
+    class: R1
+    rationale: A disabled alert sends nothing and can be deleted.
   review: draft
 - name: create_dsn
   class: R3
@@ -399,10 +404,15 @@ tools:
   compensation: link_issue
   review: draft
 - name: update_alert_rule
-  class: R2
-  rationale: Overwrites an Alert's settings; the previous settings are readable with get_alert_rule and
-    can be set again, but notifications sent meanwhile cannot be recalled.
-  compensation: update_alert_rule with the previous settings
+  class: R4
+  rationale: Changed triggers or actions send notifications that cannot be recalled; the previous settings
+    are readable but notifications sent meanwhile are not.
+  disclosure: true
+  when:
+  - arg: status
+    equals: disabled
+    class: R2
+    rationale: Disabling stops notifications; the previous settings were readable and can be set again.
   review: draft
 - name: update_dsn
   class: R3

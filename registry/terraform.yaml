@@ -191,8 +191,9 @@ tools:
   when:
   - arg: run_type
     equals: plan_only
-    class: R0
-    rationale: A speculative plan changes no infrastructure or state.
+    class: R1
+    rationale: A speculative plan creates a run record and evaluates data sources with the workspace's
+      credentials, but changes no infrastructure.
   - arg: run_type
     absent: true
     class: R1
@@ -281,9 +282,9 @@ tools:
   rationale: Deletes the variable; a sensitive value cannot be read back, so it is lost.
   review: draft
 - name: attach_variable_set_to_workspaces
-  class: R1
-  rationale: Attachment takes effect only on later runs and is undone by detaching.
-  compensation: detach_variable_set_from_workspaces
+  class: R3
+  rationale: Grants the workspaces the variable set's values, which often include credentials, for every
+    later run.
   review: draft
 - name: detach_variable_set_from_workspaces
   class: R1

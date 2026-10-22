@@ -19,13 +19,8 @@ tools:
   review: draft
 - name: write_query
   class: R4
-  rationale: Accepts any non-SELECT statement, including UPDATE, DELETE and DROP, which destroy prior
-    values.
-  when:
-  - arg: query
-    matches: '^\s*INSERT\b[^;]*;?\s*$'
-    class: R1
-    rationale: A single insert is restored by deleting the inserted rows.
+  rationale: 'Accepts any non-SELECT statement: UPDATE, DELETE and DROP destroy prior values, and even
+    INSERT can be an upsert (INSERT OR REPLACE, ON CONFLICT DO UPDATE) that overwrites rows.'
   review: draft
 - name: create_table
   class: R1
