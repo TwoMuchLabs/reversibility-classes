@@ -1,0 +1,198 @@
+# Reversibility Classes — Supabase (official MCP server)
+# Tool names verified against the evidence URLs below. Classes are drafts until reviewed.
+spec_version: '0.1'
+server:
+  id: supabase
+  name: Supabase (official MCP server)
+  source: https://github.com/supabase-community/supabase-mcp
+  evidence:
+  - https://github.com/supabase-community/supabase-mcp/tree/main/packages/mcp-server-supabase/src/tools
+  - https://raw.githubusercontent.com/supabase-community/supabase-mcp/main/README.md
+  - https://github.com/supabase-community/supabase-mcp/blob/main/packages/mcp-server-supabase/src/server.ts
+  - https://github.com/supabase-community/supabase-mcp/blob/main/packages/mcp-server-supabase/src/tools/tool-schemas.ts
+  version: supabase-community/supabase-mcp@2f5ae12c
+  status: active
+  notes: With read_only=true the server hides every tool with readOnlyHint false, blocks apply_migration,
+    and runs execute_sql and run_notebook inside a read-only transaction; deployments that enable it can
+    override those two tools to R0. The classes here do not assume that mode, because it is a server setting
+    and not enforced per call. Storage and notebook tools are opt-in feature groups, account tools are
+    not registered when project_ref is set, and create_edge_function_secret needs URL elicitation and
+    the secretCollection option. Some deployments add confirmation prompts for destructive SQL and for
+    cost; these do not change the classes.
+tools:
+- name: list_organizations
+  class: R0
+  rationale: Lists organizations.
+  review: draft
+- name: get_organization
+  class: R0
+  rationale: Reads an organization.
+  review: draft
+- name: list_projects
+  class: R0
+  rationale: Lists projects.
+  review: draft
+- name: get_project
+  class: R0
+  rationale: Reads a project.
+  review: draft
+- name: get_cost
+  class: R0
+  rationale: Returns a cost quote and creates nothing.
+  review: draft
+- name: confirm_cost
+  class: R0
+  rationale: Returns a confirmation ID to pass to a later create call; it creates nothing and incurs no
+    cost.
+  review: draft
+- name: create_project
+  class: R2
+  rationale: Creates a billable project; it can be deleted, but the charges already incurred remain.
+  compensation: delete the project in the Supabase dashboard
+  review: draft
+- name: pause_project
+  class: R3
+  rationale: Takes the project's database and APIs offline for every client until it is restored.
+  review: draft
+- name: restore_project
+  class: R2
+  rationale: Brings a paused project back online and resumes billing; pausing it again stops further charges
+    but not those already incurred.
+  compensation: pause_project
+  review: draft
+- name: create_branch
+  class: R2
+  rationale: Creates a branch that incurs hourly compute charges; it can be deleted, but the charges already
+    incurred remain.
+  compensation: delete_branch
+  review: draft
+- name: list_branches
+  class: R0
+  rationale: Lists branches.
+  review: draft
+- name: delete_branch
+  class: R4
+  rationale: Deletes the branch and its database, and any data in that database is gone.
+  review: draft
+- name: merge_branch
+  class: R4
+  rationale: Applies the branch's migrations and Edge Functions to production; the migrations are arbitrary
+    SQL that can drop production data, and there is no rollback.
+  review: draft
+- name: reset_branch
+  class: R4
+  rationale: Any untracked data or schema changes on the branch are discarded with no recovery path.
+  review: draft
+- name: rebase_branch
+  class: R4
+  rationale: Runs newer production migrations against the branch database; they are arbitrary SQL that
+    can drop branch data, and there is no rollback.
+  review: draft
+- name: list_tables
+  class: R0
+  rationale: Reads the schema.
+  review: draft
+- name: list_extensions
+  class: R0
+  rationale: Reads the installed extensions.
+  review: draft
+- name: list_migrations
+  class: R0
+  rationale: Reads the migration history.
+  review: draft
+- name: apply_migration
+  class: R4
+  rationale: Runs arbitrary SQL as a migration, which can drop tables or rewrite data with no rollback.
+  review: draft
+- name: execute_sql
+  class: R4
+  rationale: Runs arbitrary SQL, which can delete or overwrite data; the server enforces read-only execution
+    only when it is started in read-only mode, not per call.
+  review: draft
+- name: get_logs
+  class: R0
+  rationale: Reads logs.
+  review: draft
+- name: query_logs
+  class: R0
+  rationale: Runs a read-only query over the project's log store.
+  review: draft
+- name: get_advisors
+  class: R0
+  rationale: Reads advisor notices.
+  review: draft
+- name: get_project_url
+  class: R0
+  rationale: Reads the project URL.
+  review: draft
+- name: get_publishable_keys
+  class: R0
+  rationale: Reads publishable keys, which are meant for client-side use; no secret keys are returned.
+  review: draft
+- name: generate_typescript_types
+  class: R0
+  rationale: Reads the schema and returns generated types.
+  review: draft
+- name: search_docs
+  class: R0
+  rationale: Searches public documentation.
+  review: draft
+- name: list_edge_functions
+  class: R0
+  rationale: Lists Edge Functions.
+  review: draft
+- name: get_edge_function
+  class: R0
+  rationale: Reads an Edge Function's files.
+  review: draft
+- name: deploy_edge_function
+  class: R3
+  rationale: Replaces a live function that starts serving at its public URL immediately and can set verify_jwt,
+    which decides whether callers must be authenticated.
+  review: draft
+- name: submit_feedback
+  class: R4
+  rationale: Sends feedback text to Supabase staff, which cannot be unsent.
+  disclosure: true
+  review: draft
+- name: delete_feedback
+  class: R4
+  rationale: Permanently deletes a submitted feedback record; the server has no way to restore it.
+  review: draft
+- name: create_notebook
+  class: R1
+  rationale: Saves a new notebook without running any query; it is visible only to members of the principal's
+    project and can be removed.
+  compensation: delete the notebook in the Supabase dashboard
+  review: draft
+- name: list_notebooks
+  class: R0
+  rationale: Lists notebooks.
+  review: draft
+- name: get_notebook
+  class: R0
+  rationale: Reads a notebook.
+  review: draft
+- name: run_notebook
+  class: R4
+  rationale: Runs every SQL cell in the notebook, and cells can contain arbitrary SQL that deletes or
+    overwrites data; read-only execution is enforced only in read-only mode.
+  review: draft
+- name: create_edge_function_secret
+  class: R3
+  rationale: Creates or replaces an Edge Function secret, which is a credential, and the previous value
+    is not kept.
+  review: draft
+- name: list_storage_buckets
+  class: R0
+  rationale: Lists storage buckets.
+  review: draft
+- name: get_storage_config
+  class: R0
+  rationale: Reads storage configuration.
+  review: draft
+- name: update_storage_config
+  class: R3
+  rationale: Changes the upload size limit and turns S3 protocol access and image transformation on or
+    off, which changes how clients can reach storage.
+  review: draft

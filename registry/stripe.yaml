@@ -1,0 +1,88 @@
+# Reversibility Classes — Stripe (official hosted MCP server)
+# Tool names verified against the evidence URLs below. Classes are drafts until reviewed.
+spec_version: '0.1'
+server:
+  id: stripe
+  name: Stripe (official hosted MCP server)
+  source: https://github.com/stripe/agent-toolkit
+  evidence:
+  - https://docs.stripe.com/mcp
+  - https://raw.githubusercontent.com/stripe/agent-toolkit/main/README.md
+  - https://github.com/stripe/agent-toolkit/blob/main/tools/modelcontextprotocol/README.md
+  - https://github.com/stripe/agent-toolkit/blob/main/tools/modelcontextprotocol/src/index.ts
+  version: stripe/agent-toolkit@1bcd18aa
+  status: active
+  notes: Tools are served by the hosted server at mcp.stripe.com (the @stripe/mcp package is a stdio-to-HTTP
+    proxy) and verified against docs.stripe.com/mcp, which does not publish argument schemas, so this
+    record has no conditional rules. There is no read-only flag; permissions come from the OAuth grant
+    or a restricted agent API key, and Stripe requires human confirmation via a URL before some stripe_api_write
+    actions such as refunds and outbound payments. The legacy per-resource tools in manifest.json are
+    not served and are not listed.
+tools:
+- name: stripe_api_search
+  class: R0
+  rationale: Searches the catalogue of Stripe API methods.
+  review: draft
+- name: stripe_api_details
+  class: R0
+  rationale: Returns parameter documentation for one API method.
+  review: draft
+- name: stripe_api_read
+  class: R0
+  rationale: Calls GET methods only, which read account data.
+  review: draft
+- name: stripe_api_write
+  class: R4
+  rationale: Calls any supported POST, PATCH, PUT or DELETE method, including refunds and other money
+    movement that cannot be recalled.
+  review: draft
+- name: get_stripe_account_info
+  class: R0
+  rationale: Reads the connected account.
+  review: draft
+- name: atlas_company_formation
+  class: R4
+  rationale: Can advance a Delaware company formation, whose state filing and fees cannot be withdrawn
+    once submitted; a formed company can only be dissolved through a legal process.
+  review: draft
+- name: stripe_analytics
+  class: R0
+  rationale: Queries metrics and reports, including Sigma SQL, which reads account data.
+  review: draft
+- name: get_balance_summary
+  class: R0
+  rationale: Reads balances.
+  review: draft
+- name: convert_currency
+  class: R2
+  rationale: Funds stay in the principal's Treasury account and can be converted back, at the cost of
+    the exchange-rate spread and fees.
+  compensation: convert_currency back to the original currency
+  review: draft
+- name: send_money
+  class: R4
+  rationale: Sends money from a Treasury account to an outside recipient, and the payment cannot be recalled.
+  review: draft
+- name: setup_recipient
+  class: R1
+  rationale: Creates a payout recipient record and moves no money; the record can be removed.
+  compensation: remove the recipient in the Stripe Dashboard
+  review: draft
+- name: transfer_money
+  class: R4
+  rationale: Moves money between Stripe balances with no recall, and the reverse transfer is not guaranteed
+    to be supported for every pair of balances.
+  review: draft
+- name: search_stripe_documentation
+  class: R0
+  rationale: Searches public documentation.
+  review: draft
+- name: stripe_implementation_planner
+  class: R0
+  rationale: Returns integration guidance and changes nothing.
+  review: draft
+- name: send_stripe_feedback
+  class: R4
+  rationale: Sends feedback text to Stripe staff, which cannot be unsent.
+  disclosure: true
+  review: draft

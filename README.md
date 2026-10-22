@@ -27,7 +27,7 @@ Read the full specification: **[SPEC.md](SPEC.md)** (v0.1, draft for comment).
 ## The registry
 
 <!-- registry-stats:start -->
-**14 servers, 244 tools classified.** Counts are base classes; some tools drop to a lower class for specific arguments.
+**17 servers, 323 tools classified.** Counts are base classes; some tools drop to a lower class for specific arguments.
 
 | Server | Tools | R0 | R1 | R2 | R3 | R4 |
 |---|---|---|---|---|---|---|
@@ -38,14 +38,17 @@ Read the full specification: **[SPEC.md](SPEC.md)** (v0.1, draft for comment).
 | [GitHub (official MCP server)](registry/github.yaml) | 96 | 60 | 5 | 8 | 2 | 21 |
 | [Google Maps (archived MCP reference server)](registry/google-maps.yaml) | 7 | 7 | · | · | · | · |
 | [Memory / knowledge graph (MCP reference server)](registry/memory.yaml) | 9 | 3 | 3 | · | · | 3 |
+| [Notion (official self-hosted MCP server)](registry/notion.yaml) | 24 | 14 | 5 | 1 | · | 4 |
 | [Playwright MCP (Microsoft)](registry/playwright.yaml) | 72 | 30 | 17 | · | 10 | 15 |
 | [PostgreSQL (archived MCP reference server)](registry/postgres.yaml) | 1 | 1 | · | · | · | · |
 | [Puppeteer (archived MCP reference server)](registry/puppeteer.yaml) | 7 | 2 | · | · | 1 | 4 |
 | [Sequential Thinking (MCP reference server)](registry/sequentialthinking.yaml) | 1 | 1 | · | · | · | · |
 | [Slack (archived MCP reference server)](registry/slack.yaml) | 8 | 5 | · | · | · | 3 |
 | [SQLite (archived MCP reference server)](registry/sqlite.yaml) | 6 | 3 | 2 | · | · | 1 |
+| [Stripe (official hosted MCP server)](registry/stripe.yaml) | 15 | 8 | 1 | 1 | · | 5 |
+| [Supabase (official MCP server)](registry/supabase.yaml) | 40 | 23 | 1 | 3 | 4 | 9 |
 | [Time (MCP reference server)](registry/time.yaml) | 2 | 2 | · | · | · | · |
-| **Total** | **244** | **140** | **35** | **8** | **13** | **48** |
+| **Total** | **323** | **185** | **42** | **13** | **17** | **66** |
 <!-- registry-stats:end -->
 
 Every record links to the exact README or source file the tool names were verified against. Every class carries a one-sentence rationale. Entries start as `draft` and become `reviewed` or `verified` as people check them; see [CONTRIBUTING.md](CONTRIBUTING.md).

@@ -1,0 +1,179 @@
+# Reversibility Classes — Notion (official self-hosted MCP server)
+# Tool names verified against the evidence URLs below. Classes are drafts until reviewed.
+spec_version: '0.1'
+server:
+  id: notion
+  name: Notion (official self-hosted MCP server)
+  source: https://github.com/makenotion/notion-mcp-server
+  evidence:
+  - https://raw.githubusercontent.com/makenotion/notion-mcp-server/main/README.md
+  - https://github.com/makenotion/notion-mcp-server/blob/main/scripts/notion-openapi.json
+  - https://github.com/makenotion/notion-mcp-server/blob/main/src/openapi-mcp-server/mcp/proxy.ts
+  - https://github.com/makenotion/notion-mcp-server/blob/main/src/openapi-mcp-server/openapi/parser.ts
+  version: makenotion/notion-mcp-server@730ae781
+  status: active
+  notes: Tools are generated from scripts/notion-openapi.json as "API-" plus the operationId. The server
+    marks every non-GET tool destructiveHint:true, including API-post-search and API-query-data-source,
+    which only read. There is no read-only flag, but an integration token limited to the "Read content"
+    capability blocks writes. Archived and trashed pages and blocks can be restored. The API keeps no
+    prior version when content is overwritten; deployments on plans with page history can override the
+    overwrite tools to R3. Content written under a page that is shared to the web becomes public. The
+    vendor says this server is no longer actively maintained; the hosted Remote Notion MCP has a different
+    tool set and is not covered.
+tools:
+- name: API-get-user
+  class: R0
+  rationale: Reads a user.
+  review: draft
+- name: API-get-users
+  class: R0
+  rationale: Lists users.
+  review: draft
+- name: API-get-self
+  class: R0
+  rationale: Reads the integration's bot user.
+  review: draft
+- name: API-post-search
+  class: R0
+  rationale: Searches pages and data sources by title; the POST method only carries the query.
+  review: draft
+- name: API-get-block-children
+  class: R0
+  rationale: Lists child blocks.
+  review: draft
+- name: API-patch-block-children
+  class: R1
+  rationale: Appends new blocks and leaves existing blocks untouched; the new blocks can be deleted.
+  compensation: API-delete-a-block on each appended block
+  review: draft
+- name: API-retrieve-a-block
+  class: R0
+  rationale: Reads a block.
+  review: draft
+- name: API-update-a-block
+  class: R4
+  rationale: Overwrites a block's text with no copy of the previous content kept or returned by the API.
+  when:
+  - all:
+    - arg: archived
+      equals: true
+    - arg: type
+      absent: true
+    class: R1
+    rationale: Only archives the block, which can be restored by un-archiving it.
+  - all:
+    - arg: archived
+      equals: false
+    - arg: type
+      absent: true
+    class: R1
+    rationale: Only restores an archived block, which can be archived again.
+  review: draft
+- name: API-delete-a-block
+  class: R1
+  rationale: Moves the block to trash, from which Notion can restore it.
+  compensation: API-update-a-block with archived false
+  review: draft
+- name: API-retrieve-a-page
+  class: R0
+  rationale: Reads page properties.
+  review: draft
+- name: API-patch-page
+  class: R2
+  rationale: Overwrites page properties, icon or cover; the previous values were readable before the call
+    and can be set again.
+  when:
+  - all:
+    - arg: in_trash
+      equals: true
+    - arg: properties
+      absent: true
+    - arg: icon
+      absent: true
+    - arg: cover
+      absent: true
+    class: R1
+    rationale: Only moves the page to trash, from which it can be restored.
+  - all:
+    - arg: archived
+      equals: true
+    - arg: properties
+      absent: true
+    - arg: icon
+      absent: true
+    - arg: cover
+      absent: true
+    class: R1
+    rationale: Only archives the page, which can be restored.
+  compensation: API-patch-page with the previous values, or with in_trash false
+  review: draft
+- name: API-post-page
+  class: R1
+  rationale: Creates a new page inside the workspace and changes no existing content; the page can be
+    trashed.
+  compensation: API-patch-page with in_trash true
+  review: draft
+- name: API-retrieve-a-page-property
+  class: R0
+  rationale: Reads a page property.
+  review: draft
+- name: API-retrieve-a-comment
+  class: R0
+  rationale: Lists comments.
+  review: draft
+- name: API-create-a-comment
+  class: R4
+  rationale: Posts a comment that other people with access see and are notified of.
+  disclosure: true
+  review: draft
+- name: API-query-data-source
+  class: R0
+  rationale: Queries rows of a data source; the POST method only carries the filter.
+  review: draft
+- name: API-retrieve-a-data-source
+  class: R0
+  rationale: Reads a data source schema.
+  review: draft
+- name: API-update-a-data-source
+  class: R4
+  rationale: A property schema change can remove a property or change its type, which discards that property's
+    values on every row.
+  when:
+  - arg: properties
+    absent: true
+    class: R2
+    rationale: Only the title or description changes, and the previous values were readable and can be
+      set again.
+  review: draft
+- name: API-create-a-data-source
+  class: R1
+  rationale: Creates a new data source and changes no existing content; it can be trashed.
+  compensation: trash the new data source
+  review: draft
+- name: API-list-data-source-templates
+  class: R0
+  rationale: Lists templates.
+  review: draft
+- name: API-retrieve-a-database
+  class: R0
+  rationale: Reads database metadata.
+  review: draft
+- name: API-move-page
+  class: R1
+  rationale: Moving the page back to its previous parent restores its location and inherited permissions.
+  compensation: API-move-page back to the previous parent
+  review: draft
+- name: API-retrieve-page-markdown
+  class: R0
+  rationale: Reads page content.
+  review: draft
+- name: API-update-page-markdown
+  class: R4
+  rationale: Can replace the whole page, a range of it, or matched text, and with allow_deleting_content
+    can delete child pages; the API keeps no copy of the previous content.
+  when:
+  - arg: type
+    equals: insert_content
+    class: R1
+    rationale: Only inserts new content, which can be removed again.
+  review: draft
