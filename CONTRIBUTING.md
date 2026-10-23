@@ -30,6 +30,20 @@ rclass validate registry
 pytest -q
 ```
 
+## Using AI tools
+
+AI-assisted contributions are welcome. Most of this registry was drafted with AI help and then checked. The rule is the same either way: **you are accountable for every tool name and every class you submit.** Say in the pull request which tools you used and what you checked by hand. The evidence links are how reviewers verify the work, so a tool name with no traceable source, or a class an AI proposed that you didn't check against the code, will be sent back.
+
+## Before you open a pull request
+
+- **One server per pull request.** Claim it on the [help-wanted issue](https://github.com/waghmaredb/reversibility-classes/issues/5) first, so two people don't do the same one.
+- **Use the server people actually install.** That is usually the vendor's official repository, not a fork or an older copy. Say which in `server.source`.
+- **Pin what you checked.** Put the commit or release you verified against in `server.version`.
+- **Every tool, exact names.** Compare against the server's code (where tools are registered), not only its README.
+- **Ask "what does it overwrite or delete?"** A tool that overwrites or removes data with no history in that system is R4, even if it looks routine. A deployment with backups can lower it with an override; the registry records the default.
+- **Ask "who receives this?"** Anything whose purpose is to deliver content to people or other systems is a disclosure (R4, `disclosure: true`).
+- **Flag what doesn't fit.** If a tool doesn't fit the five classes cleanly, say so in the pull request. That's input for the next version of the spec, not a failure.
+
 ## Style for rationales
 
 One sentence, plain words, stating the fact that decides the class: *"Fails if the destination exists, so nothing is overwritten."* Not *"Low risk."*
