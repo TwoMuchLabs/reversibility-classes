@@ -102,7 +102,7 @@
         },
         "disclosure": {
           "type": "boolean",
-          "description": "True if the tool's effect includes a disclosure (SPEC 4.1 rule 2). Overrides can never lower such a tool."
+          "description": "True if the tool's effect includes a disclosure (SPEC 4.1 rule 2). An override can lower such a tool only by explicitly setting disclosure: false (SPEC 5.5)."
         },
         "when": {
           "type": "array",

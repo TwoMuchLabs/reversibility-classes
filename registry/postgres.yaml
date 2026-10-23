@@ -8,6 +8,7 @@ server:
   evidence:
   - https://raw.githubusercontent.com/modelcontextprotocol/servers-archived/main/src/postgres/README.md
   - https://raw.githubusercontent.com/modelcontextprotocol/servers-archived/main/src/postgres/index.ts
+  - https://securitylabs.datadoghq.com/articles/mcp-vulnerability-case-study-SQL-injection-in-the-postgresql-mcp-server/
   version: modelcontextprotocol/servers-archived@9be4674d
   status: archived
   notes: Archived. The server runs every query inside a READ ONLY transaction and always rolls it back.
@@ -15,7 +16,7 @@ tools:
 - name: query
   class: R4
   rationale: The SQL is run inside a read-only transaction, but the driver accepts several statements,
-    so a query beginning with COMMIT; escapes it and can change or destroy data.
+    so a query beginning with COMMIT; escapes it and can change or destroy data (reported by Datadog Security Labs, August 2025).
   when:
   - arg: sql
     matches: '^\s*SELECT\b[^;]*;?\s*$'

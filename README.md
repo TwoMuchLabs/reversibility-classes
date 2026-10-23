@@ -60,7 +60,7 @@ A few classifications worth arguing about:
 
 - `filesystem/write_file` is **R4**: it overwrites without keeping the old content. `edit_file` is **R1**, because it returns a diff you can invert.
 - `slack/slack_add_reaction` is **R4**: other people see it, and the server can't remove it.
-- `postgres/query` is **R4** unless the query is a single `SELECT`. The server wraps every query in a read-only transaction, but a query that starts with `COMMIT;` escapes it.
+- `postgres/query` is **R4** unless the query is a single `SELECT`. The server wraps every query in a read-only transaction, but a query that starts with `COMMIT;` escapes it ([reported by Datadog Security Labs](https://securitylabs.datadoghq.com/articles/mcp-vulnerability-case-study-SQL-injection-in-the-postgresql-mcp-server/) in 2025).
 - Every Playwright tool that accepts a `filename` is **R4** when one is given: an explicit filename is resolved against your workspace root, so it can overwrite your own files.
 
 The registry has had one independent audit; the fixes are applied, and the [open questions](docs/open-classification-questions.md) it raised are waiting for opinions. Disagree with a class? [Open a classification dispute](../../issues/new?template=classification-dispute.yml). That is the point.
