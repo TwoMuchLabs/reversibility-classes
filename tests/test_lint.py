@@ -80,3 +80,30 @@ def test_exception_lists_have_no_stale_entries():
         assert key in known and known[key].base is RClass.R0, f"stale R0 exception: {key}"
     for key in NOT_DISCLOSURE_DESPITE_SENDING_NAME:
         assert key in known and not known[key].disclosure, f"stale disclosure exception: {key}"
+
+
+# Classes whose definition is a claim that the action can be undone.
+UNDO_CLAIM_CLASSES = {RClass.R1, RClass.R2}
+
+
+def _claims_undo(entry) -> bool:
+    if entry.base in UNDO_CLAIM_CLASSES:
+        return True
+    return any(RClass.parse(rule["class"]) in UNDO_CLAIM_CLASSES for rule in entry.raw.get("when", []))
+
+
+@pytest.mark.parametrize("entry", ENTRIES, ids=lambda e: f"{e.server}/{e.name}")
+def test_undo_claims_name_their_undo(entry):
+    """R1 and R2 say "this can be undone". Saying so without naming how is how a wrong-direction
+    undo slips through (a refund is not undone by a refund). Name the operation, so a reviewer can
+    check that it exists, that it reverses *this* action, and that no outside party must agree."""
+    if not _claims_undo(entry):
+        return
+    comp = str(entry.raw.get("compensation", "")).strip()
+    assert comp, (
+        f"{entry.server}/{entry.name} is classed R1/R2 (directly or by a `when` rule) but has no "
+        "`compensation`. Name the operation that restores or compensates it, or raise the class."
+    )
+    assert comp.lower() != entry.name.lower(), (
+        f"{entry.server}/{entry.name} names itself as its own compensation; name the reversing operation."
+    )

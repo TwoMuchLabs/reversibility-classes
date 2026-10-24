@@ -35,32 +35,32 @@ Browse the whole registry: **[reversibility.twomuchlabs.com](https://reversibili
 |---|---|---|---|---|---|---|
 | [Brave Search (official MCP server)](registry/brave-search.yaml) | 8 | 8 | · | · | · | · |
 | [Fetch (MCP reference server)](registry/fetch.yaml) | 1 | 1 | · | · | · | · |
-| [Filesystem (MCP reference server)](registry/filesystem.yaml) | 14 | 10 | 3 | · | · | 1 |
-| [Git (MCP reference server)](registry/git.yaml) | 12 | 7 | 5 | · | · | · |
-| [GitHub (official MCP server)](registry/github.yaml) | 96 | 60 | 5 | 6 | 2 | 23 |
+| [Filesystem (MCP reference server)](registry/filesystem.yaml) | 14 | 10 | 2 | · | · | 2 |
+| [Git (MCP reference server)](registry/git.yaml) | 12 | 7 | 2 | · | 2 | 1 |
+| [GitHub (official MCP server)](registry/github.yaml) | 96 | 60 | 5 | 5 | 3 | 23 |
 | [Google Maps (archived MCP reference server)](registry/google-maps.yaml) | 7 | 7 | · | · | · | · |
 | [Kubernetes (containers/kubernetes-mcp-server)](registry/kubernetes.yaml) | 76 | 59 | 2 | · | 4 | 11 |
 | [Memory / knowledge graph (MCP reference server)](registry/memory.yaml) | 9 | 3 | 3 | · | · | 3 |
 | [Notion (official self-hosted MCP server)](registry/notion.yaml) | 24 | 14 | 1 | · | 1 | 8 |
-| [Playwright MCP (Microsoft)](registry/playwright.yaml) | 72 | 29 | 8 | · | 10 | 25 |
+| [Playwright MCP (Microsoft)](registry/playwright.yaml) | 72 | 29 | 5 | · | 12 | 26 |
 | [PostgreSQL (archived MCP reference server)](registry/postgres.yaml) | 1 | · | · | · | · | 1 |
 | [Puppeteer (archived MCP reference server)](registry/puppeteer.yaml) | 7 | 2 | · | · | · | 5 |
-| [Sentry (official MCP server)](registry/sentry.yaml) | 76 | 52 | 5 | 4 | 4 | 11 |
+| [Sentry (official MCP server)](registry/sentry.yaml) | 76 | 52 | 2 | 6 | 5 | 11 |
 | [Sequential Thinking (MCP reference server)](registry/sequentialthinking.yaml) | 1 | 1 | · | · | · | · |
 | [Slack (archived MCP reference server)](registry/slack.yaml) | 8 | 5 | · | · | · | 3 |
-| [SQLite (archived MCP reference server)](registry/sqlite.yaml) | 6 | 3 | 2 | · | · | 1 |
-| [Stripe (official hosted MCP server)](registry/stripe.yaml) | 15 | 8 | 1 | 1 | · | 5 |
-| [Supabase (official MCP server)](registry/supabase.yaml) | 40 | 23 | 1 | 3 | 3 | 10 |
-| [Terraform (HashiCorp MCP server)](registry/terraform.yaml) | 61 | 39 | 9 | 1 | 7 | 5 |
+| [SQLite (archived MCP reference server)](registry/sqlite.yaml) | 6 | 3 | · | 2 | · | 1 |
+| [Stripe (official hosted MCP server)](registry/stripe.yaml) | 15 | 8 | · | 2 | · | 5 |
+| [Supabase (official MCP server)](registry/supabase.yaml) | 40 | 23 | 1 | 2 | 4 | 10 |
+| [Terraform (HashiCorp MCP server)](registry/terraform.yaml) | 61 | 39 | 8 | 1 | 8 | 5 |
 | [Time (MCP reference server)](registry/time.yaml) | 2 | 2 | · | · | · | · |
-| **Total** | **536** | **333** | **45** | **15** | **31** | **112** |
+| **Total** | **536** | **333** | **31** | **18** | **39** | **115** |
 <!-- registry-stats:end -->
 
 Every record links to the exact README or source file the tool names were verified against. Every class carries a one-sentence rationale. Entries start as `draft` and become `reviewed` or `verified` as people check them; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 A few classifications worth arguing about:
 
-- `filesystem/write_file` is **R4**: it overwrites without keeping the old content. `edit_file` is **R1**, because it returns a diff you can invert.
+- `filesystem/write_file` is **R4**: it overwrites without keeping the old content. So is `edit_file`, though it returns a diff: it rewrites the file as UTF-8, so invalid bytes and mixed line endings change in ways the diff does not show.
 - `slack/slack_add_reaction` is **R4**: other people see it, and the server can't remove it.
 - `postgres/query` is **R4** unless the query is a single `SELECT`. The server wraps every query in a read-only transaction, but a query that starts with `COMMIT;` escapes it ([reported by Datadog Security Labs](https://securitylabs.datadoghq.com/articles/mcp-vulnerability-case-study-SQL-injection-in-the-postgresql-mcp-server/) in 2025).
 - Every Playwright tool that accepts a `filename` is **R4** when one is given: an explicit filename is resolved against your workspace root, so it can overwrite your own files.
