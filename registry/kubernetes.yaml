@@ -206,7 +206,8 @@ tools:
 - name: vm_clone
   class: R1
   rationale: Creates a new VM from an existing one, leaving the source untouched; the clone can be deleted.
-  compensation: delete the cloned VirtualMachine
+  compensation: resources_delete the target VirtualMachine (kubevirt.io/v1), then any restored PersistentVolumeClaims
+    the clone left without an owner
   review: draft
 - name: vm_console_screenshot
   class: R0
@@ -232,6 +233,8 @@ tools:
     - unpause
     class: R1
     rationale: Starting or unpausing a VM is undone by stopping or pausing it again.
+  compensation: vm_lifecycle with action pause after unpause; after start, vm_lifecycle stop if the VM was
+    halted, otherwise resources_create_or_update setting spec.runStrategy back to its previous value
   review: draft
 - name: vm_create_from_template
   class: R1

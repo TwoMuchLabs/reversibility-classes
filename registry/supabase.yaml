@@ -55,10 +55,9 @@ tools:
   rationale: Takes the project's database and APIs offline for every client until it is restored.
   review: draft
 - name: restore_project
-  class: R2
-  rationale: Brings a paused project back online and resumes billing; pausing it again stops further charges
-    but not those already incurred.
-  compensation: pause_project
+  class: R3
+  rationale: Restoring moves the database to the latest Postgres minor version, which pausing does not
+    undo, and a project on a paid plan cannot be paused again at all.
   review: draft
 - name: create_branch
   class: R2
@@ -163,7 +162,8 @@ tools:
   class: R1
   rationale: Saves a new notebook without running any query; it is visible only to members of the principal's
     project and can be removed.
-  compensation: delete the notebook in the Supabase dashboard
+  compensation: DELETE /v2/projects/{ref}/notebooks/{id} in the Management API, or delete the notebook
+    in the Supabase dashboard
   review: draft
 - name: list_notebooks
   class: R0

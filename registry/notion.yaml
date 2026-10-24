@@ -59,7 +59,8 @@ tools:
 - name: API-delete-a-block
   class: R1
   rationale: Moves the block to trash, from which Notion can restore it.
-  compensation: API-update-a-block with archived false
+  compensation: API-update-a-block with archived false, or for a page block API-patch-page with in_trash
+    false
   review: draft
 - name: API-retrieve-a-page
   class: R0
@@ -103,11 +104,17 @@ tools:
   rationale: A property schema change can remove a property or change its type, which discards that property's
     values on every row.
   when:
-  - arg: properties
-    absent: true
+  - all:
+    - arg: properties
+      absent: true
+    - arg: parent
+      absent: true
     class: R2
-    rationale: Only the title or description changes, and the previous values were readable and can be
-      set again.
+    rationale: Only the title, description, icon or trash state changes, and the previous values were readable
+      and can be set again; a parent, which the proxy forwards unchecked, would move the data source into
+      another database's permissions.
+  compensation: API-update-a-data-source with the previous title, description and icon, or with in_trash
+    false
   review: draft
 - name: API-create-a-data-source
   class: R4
@@ -134,11 +141,7 @@ tools:
   review: draft
 - name: API-update-page-markdown
   class: R4
-  rationale: Can replace the whole page, a range of it, or matched text, and with allow_deleting_content
-    can delete child pages; the API keeps no copy of the previous content.
-  when:
-  - arg: type
-    equals: insert_content
-    class: R1
-    rationale: Only inserts new content, which can be removed again.
+  rationale: Can replace the page or delete child pages with no copy kept, and any content it writes, including
+    insert_content, is published at once under a page shared to the web.
+  disclosure: true
   review: draft

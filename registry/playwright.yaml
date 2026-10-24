@@ -24,10 +24,10 @@ tools:
   rationale: A click can submit a form, make a purchase or send a message; the effect depends on the page.
   review: draft
 - name: browser_close
-  class: R1
-  rationale: Closing discards only the open page's in-session state; the page can be reopened by navigating
-    to it again.
-  compensation: browser_navigate to the page again
+  class: R3
+  rationale: Closes the whole browser with every tab, losing session cookies, sessionStorage and unsaved
+    page state (and in isolated mode all cookies and storage), so recovery can need a fresh sign-in by a
+    human.
   review: draft
 - name: browser_console_messages
   class: R4
@@ -160,9 +160,20 @@ tools:
   rationale: Waits for text or time; no effect.
   review: draft
 - name: browser_tabs
-  class: R1
-  rationale: Closing a tab discards its page state; the tab can be reopened from its URL.
-  compensation: browser_tabs create with the closed tab's URL
+  class: R3
+  rationale: Closing a tab discards its sessionStorage and unsaved page state with no copy returned, and
+    reopening the URL loads a fresh page that can need a fresh sign-in by a human.
+  when:
+  - arg: action
+    in:
+    - list
+    - select
+    - new
+    class: R1
+    rationale: Listing, selecting or opening a tab closes nothing; a new tab can be closed and the previous
+      tab selected again.
+  compensation: browser_tabs with action close for a tab opened with new, or action select for the previously
+    selected tab
   review: draft
 - name: browser_get_config
   class: R0
@@ -321,9 +332,10 @@ tools:
   compensation: delete the trace file
   review: draft
 - name: browser_stop_video
-  class: R1
-  rationale: Finishes the video file, which can simply be deleted.
-  compensation: delete the video file
+  class: R4
+  rationale: The video is written only now, to the filename given to browser_start_video, which is resolved
+    against the workspace root and can overwrite an existing project file that stop_video's own arguments
+    cannot reveal.
   review: draft
 - name: browser_video_chapter
   class: R0
