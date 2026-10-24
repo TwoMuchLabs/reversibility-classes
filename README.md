@@ -24,6 +24,8 @@ Refunding a $40,000 charge is expensive but recoverable: **R2**. A one-line mess
 
 Read the full specification: **[SPEC.md](SPEC.md)** (v0.1, draft for comment).
 
+Browse the whole registry: **[reversibility.twomuchlabs.com](https://reversibility.twomuchlabs.com)**.
+
 ## The registry
 
 <!-- registry-stats:start -->
