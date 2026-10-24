@@ -9,6 +9,6 @@ This repository uses two licenses.
 
 Under CC BY 4.0 you may share and adapt the specification and the registry for any purpose, including commercially, as long as you give appropriate credit, link to the license, and indicate if changes were made. A suggested attribution:
 
-> Reversibility Classes for Agent Actions, by Deepak Waghmare and contributors, https://github.com/waghmaredb/reversibility-classes, licensed under CC BY 4.0.
+> Reversibility Classes for Agent Actions, by Deepak Waghmare and contributors, https://github.com/TwoMuchLabs/reversibility-classes, licensed under CC BY 4.0.
 
 If you use the specification in research, please cite it using [`CITATION.cff`](CITATION.cff).

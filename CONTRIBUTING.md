@@ -36,7 +36,7 @@ AI-assisted contributions are welcome. Most of this registry was drafted with AI
 
 ## Before you open a pull request
 
-- **One server per pull request.** Claim it on the [help-wanted issue](https://github.com/waghmaredb/reversibility-classes/issues/5) first, so two people don't do the same one.
+- **One server per pull request.** Claim it on the [help-wanted issue](https://github.com/TwoMuchLabs/reversibility-classes/issues/5) first, so two people don't do the same one.
 - **Use the server people actually install.** That is usually the vendor's official repository, not a fork or an older copy. Say which in `server.source`.
 - **Pin what you checked.** Put the commit or release you verified against in `server.version`.
 - **Every tool, exact names.** Compare against the server's code (where tools are registered), not only its README.

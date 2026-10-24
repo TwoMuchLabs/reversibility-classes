@@ -68,7 +68,7 @@ The registry has had one independent audit; the fixes are applied, and the [open
 ## Use it
 
 ```bash
-pip install git+https://github.com/waghmaredb/reversibility-classes
+pip install git+https://github.com/TwoMuchLabs/reversibility-classes
 rclass lookup sqlite write_query --args '{"query": "DROP TABLE users"}'
 # R4  Irreversible  (registry)
 #   Accepts any non-SELECT statement: UPDATE, DELETE and DROP destroy prior values, and even INSERT can be an upsert (INSERT OR REPLACE, ON CONFLICT DO UPDATE) that overwrites rows.
@@ -96,4 +96,4 @@ v0.1 is a draft for comment. Open questions for v0.2 include a **detection windo
 
 Specification, schema and registry: [CC BY 4.0](LICENSE-SPEC-AND-DATA.md). Code: [Apache 2.0](LICENSE). To cite, see [CITATION.cff](CITATION.cff).
 
-Maintained by [Deepak Waghmare](https://github.com/waghmaredb). Written in a personal capacity.
+A [Two Much Labs](https://twomuchlabs.com) project. Maintained by [Deepak Waghmare](https://github.com/waghmaredb). Written in a personal capacity.

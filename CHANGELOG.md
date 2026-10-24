@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Repository moved to [TwoMuchLabs/reversibility-classes](https://github.com/TwoMuchLabs/reversibility-classes). Old `waghmaredb/reversibility-classes` URLs, including `pip install git+...` links, redirect automatically.
+
 ## v0.1.0 — 2026-10-23
 
 First public draft of **Reversibility Classes for Agent Actions**: a shared vocabulary for one question, *if your AI agent gets this wrong, can you undo it?*

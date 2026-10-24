@@ -8,7 +8,7 @@ authors:
 version: 0.1.0
 date-released: 2026-10-22
 license: CC-BY-4.0
-repository-code: "https://github.com/waghmaredb/reversibility-classes"
+repository-code: "https://github.com/TwoMuchLabs/reversibility-classes"
 keywords:
   - ai-agents
   - model-context-protocol

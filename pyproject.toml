@@ -26,8 +26,8 @@ dev = ["pytest>=8"]
 rclass = "rclass.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/waghmaredb/reversibility-classes"
-Specification = "https://github.com/waghmaredb/reversibility-classes/blob/main/SPEC.md"
+Homepage = "https://github.com/TwoMuchLabs/reversibility-classes"
+Specification = "https://github.com/TwoMuchLabs/reversibility-classes/blob/main/SPEC.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["rclass"]
