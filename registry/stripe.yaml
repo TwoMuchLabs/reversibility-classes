@@ -65,9 +65,11 @@ tools:
   rationale: Sends money from a Treasury account to an outside recipient, and the payment cannot be recalled.
   review: draft
 - name: setup_recipient
-  class: R1
-  rationale: Creates a payout recipient record and moves no money; the record can be removed.
-  compensation: remove the recipient in the Stripe Dashboard
+  class: R2
+  rationale: A recipient is a v2 Account that Stripe documents no way to delete; closing it ends its use
+    but the closed record stays retrievable, and close is not among the methods this server exposes.
+  compensation: close the recipient's v2 Account (POST /v2/core/accounts/{id}/close with applied_configurations
+    [recipient]) with an agent API key outside this server
   review: draft
 - name: transfer_money
   class: R4

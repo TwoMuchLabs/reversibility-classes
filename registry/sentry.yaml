@@ -32,6 +32,8 @@ tools:
   class: R2
   rationale: Starts a Seer analysis run on the issue; the run is recorded on the issue and consumes Seer
     usage that cannot be returned, but no issue data changes.
+  compensation: none needed beyond ignoring the analysis; the run record, its issue activity entry,
+    the Seer quota used and any Seer webhooks sent to installed Sentry Apps remain
   review: draft
 - name: create_alert_rule
   class: R4
@@ -43,6 +45,7 @@ tools:
     equals: disabled
     class: R1
     rationale: A disabled alert sends nothing and can be deleted.
+  compensation: delete_alert_rule
   review: draft
 - name: create_dsn
   class: R3
@@ -70,19 +73,29 @@ tools:
   rationale: Configures Sentry to send repeated HTTP requests with any method, headers and body to any
     URL, which can change state on or transmit data to the target.
   when:
-  - arg: method
-    absent: true
+  - all:
+    - arg: method
+      absent: true
+    - arg: headers
+      absent: true
+    - arg: body
+      absent: true
     class: R2
-    rationale: The check uses the default GET; the monitor can be deleted, but active monitors consume
-      paid uptime quota.
-  - arg: method
-    in:
-    - GET
-    - HEAD
-    - OPTIONS
+    rationale: The check uses the default GET with no custom headers or body; the monitor can be deleted,
+      but active monitors consume paid uptime quota.
+  - all:
+    - arg: method
+      in:
+      - GET
+      - HEAD
+      - OPTIONS
+    - arg: headers
+      absent: true
+    - arg: body
+      absent: true
     class: R2
-    rationale: A read-only HTTP method; the monitor can be deleted, but active monitors consume paid uptime
-      quota.
+    rationale: A read-only HTTP method with no custom headers or body; the monitor can be deleted, but
+      active monitors consume paid uptime quota.
   compensation: delete_uptime_monitor
   review: draft
 - name: delete_alert_rule
@@ -155,28 +168,51 @@ tools:
     in:
     - create_project
     - create_team
-    - link_issue
-    - onboarding_status_update
-    - unlink_issue
     class: R1
     rationale: Runs a catalog tool classed R1 in this record.
+  - all:
+    - arg: name
+      equals: link_issue
+    - arg: arguments.appSlug
+      absent: true
+    - arg: arguments.externalIssueUrl
+      matches: '^https://(github\.com|gitlab\.com|bitbucket\.org|dev\.azure\.com|[a-z0-9-]+\.atlassian\.net)/'
+    class: R2
+    rationale: Links a native-integration ticket; unlink_issue removes the association but not the link
+      activity entry.
+  - all:
+    - arg: name
+      equals: create_alert_rule
+    - arg: arguments.status
+      equals: disabled
+    class: R2
+    rationale: Creates a disabled Alert, which sends nothing and can be deleted.
   - arg: name
     in:
-    - create_alert_rule
     - create_metric_monitor
-    - update_alert_rule
+    - onboarding_status_update
+    - unlink_issue
     - update_metric_monitor
     - update_project
     class: R2
     rationale: Runs a catalog tool classed R2 in this record.
+  - all:
+    - arg: name
+      equals: update_alert_rule
+    - arg: arguments.status
+      equals: disabled
+    class: R2
+    rationale: Disables an Alert; the previous settings were readable and can be set again.
   - arg: name
     in:
     - add_team_to_project
     - create_dsn
+    - link_issue
     - remove_team_from_project
     - update_dsn
     class: R3
     rationale: Runs a catalog tool classed R3 in this record.
+  compensation: the compensation recorded for the catalog tool named in the name argument
   review: draft
 - name: find_alert_rules
   class: R0
@@ -331,15 +367,26 @@ tools:
   rationale: Reads an uptime monitor and its checks.
   review: draft
 - name: link_issue
-  class: R1
-  rationale: Adds a reference to an existing external ticket; it does not create a ticket and can be removed
-    with unlink_issue.
+  class: R3
+  rationale: For Sentry App links (Linear, Shortcut and other Apps) Sentry calls the App's link callback
+    in the external service, which unlink_issue does not reverse because it removes only the Sentry association.
+  when:
+  - all:
+    - arg: appSlug
+      absent: true
+    - arg: externalIssueUrl
+      matches: '^https://(github\.com|gitlab\.com|bitbucket\.org|dev\.azure\.com|[a-z0-9-]+\.atlassian\.net)/'
+    class: R2
+    rationale: A native-integration link with no provider comment; unlink_issue removes the association,
+      but the link activity entry stays on the issue.
   compensation: unlink_issue
   review: draft
 - name: onboarding_status_update
-  class: R1
-  rationale: Updates operational progress state shown in Sentry's onboarding UI, which a later update
-    replaces.
+  class: R2
+  rationale: A later update cannot replace a completed, skipped or bypassed stage or a completed or failed
+    run (Sentry freezes them and bypasses earlier stages), so the only recovery is a new onboarding run.
+  compensation: start a new onboarding run from Sentry's getting-started flow; the old run stays frozen
+    until it expires
   review: draft
 - name: remove_team_from_project
   class: R3
@@ -398,9 +445,9 @@ tools:
   rationale: Searches spans and traces.
   review: draft
 - name: unlink_issue
-  class: R1
-  rationale: Removes a reference to an external ticket; the ticket is untouched and the link can be added
-    back with link_issue.
+  class: R2
+  rationale: link_issue can add the reference back, but re-linking records new link activity and, for
+    Sentry App links, calls the App's link callback again, so the prior state is not restored exactly.
   compensation: link_issue
   review: draft
 - name: update_alert_rule
@@ -413,6 +460,7 @@ tools:
     equals: disabled
     class: R2
     rationale: Disabling stops notifications; the previous settings were readable and can be set again.
+  compensation: update_alert_rule with the previous status and settings read with get_alert_rule
   review: draft
 - name: update_dsn
   class: R3
@@ -429,6 +477,7 @@ tools:
     class: R2
     rationale: Status and assignment can be set back with update_issue, though assignment and resolution
       notifications are already sent.
+  compensation: update_issue with the previous status and assignee, without reason
   review: draft
 - name: update_metric_monitor
   class: R2
@@ -447,14 +496,19 @@ tools:
   rationale: Can change the check to send repeated requests with any method, headers and body to any URL,
     which can change state on or transmit data to the target.
   when:
-  - arg: method
-    in:
-    - GET
-    - HEAD
-    - OPTIONS
+  - all:
+    - arg: method
+      in:
+      - GET
+      - HEAD
+      - OPTIONS
+    - arg: headers
+      absent: true
+    - arg: body
+      absent: true
     class: R2
-    rationale: A read-only HTTP method; the previous settings are readable with get_uptime_monitor_details
-      and can be set again.
+    rationale: A read-only HTTP method with headers and body untouched, because get_uptime_monitor_details
+      redacts sensitive headers and omits the body, so their previous values cannot be read back to restore.
   compensation: update_uptime_monitor with the previous settings
   review: draft
 - name: whoami

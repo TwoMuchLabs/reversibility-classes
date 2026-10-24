@@ -156,9 +156,20 @@ tools:
   compensation: discard the run and delete_workspace_safely
   review: draft
 - name: update_workspace
-  class: R2
-  rationale: Overwrites workspace settings such as name, auto_apply and Terraform version; the previous
-    values are readable with get_workspace_details and can be set again.
+  class: R3
+  rationale: Setting auto_apply true lets later runs, including VCS-triggered ones, apply infrastructure
+    without confirmation, and setting it back does not undo runs applied meanwhile.
+  when:
+  - arg: auto_apply
+    absent: true
+    class: R2
+    rationale: Overwrites settings such as name and Terraform version; the previous values are readable
+      with get_workspace_details and can be set again.
+  - arg: auto_apply
+    equals: 'false'
+    class: R2
+    rationale: Overwrites settings and keeps confirmation on; the previous values are readable with
+      get_workspace_details and can be set again.
   compensation: update_workspace with the previous values
   review: draft
 - name: delete_workspace_safely
@@ -196,13 +207,15 @@ tools:
       credentials, but changes no infrastructure.
   - arg: run_type
     absent: true
-    class: R1
-    rationale: The default plan_and_apply sets auto-apply false, so the plan waits for confirmation and
-      can be discarded.
+    class: R2
+    rationale: The default plan_and_apply sets auto-apply false so the plan waits and can be discarded,
+      but the run stays in history and any configured Created, Planning or Needs Attention notifications
+      are sent.
   - arg: run_type
     equals: plan_and_apply
-    class: R1
-    rationale: The tool sets auto-apply false, so the plan waits for confirmation and can be discarded.
+    class: R2
+    rationale: The tool sets auto-apply false so the plan waits and can be discarded, but the run stays
+      in history and any configured Created, Planning or Needs Attention notifications are sent.
   - arg: run_type
     in:
     - refresh_state
@@ -211,6 +224,7 @@ tools:
     class: R3
     rationale: The run can apply without confirmation (auto_approve, or the workspace auto-apply setting),
       changing infrastructure or state.
+  compensation: action_run with run_action discard for a plan_and_apply run; a plan_only run needs none
   review: draft
 - name: action_run
   class: R4
@@ -218,12 +232,14 @@ tools:
   when:
   - arg: run_action
     equals: discard
-    class: R1
-    rationale: Discarding an unapplied plan changes no infrastructure; a new run can be queued.
+    class: R2
+    rationale: Discarding changes no infrastructure, but a discarded run cannot be resumed and create_run
+      queues a new run only on the latest configuration version, not the discarded run's.
   - arg: run_action
     equals: cancel
     class: R3
     rationale: Cancelling an apply part-way can leave infrastructure and state partly changed.
+  compensation: create_run to queue a new plan on the latest configuration version
   review: draft
 - name: get_plan_details
   class: R0
@@ -292,9 +308,11 @@ tools:
   compensation: attach_variable_set_to_workspaces
   review: draft
 - name: create_workspace_tags
-  class: R1
-  rationale: Adds tags, which can be removed in HCP Terraform; existing tags are kept.
-  compensation: remove the tags in HCP Terraform
+  class: R2
+  rationale: Adding a tag binding whose key already exists modifies that key's value, so removing the
+    tags would delete the old binding instead of restoring it.
+  compensation: create_workspace_tags with the previous key:value pairs read with read_workspace_tags,
+    and remove newly added keys in HCP Terraform
   review: draft
 - name: read_workspace_tags
   class: R0
