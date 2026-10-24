@@ -38,8 +38,8 @@ A Reversibility Class describes the **worst plausible recoverable state** after 
 | Class | Name | Test | Typical examples |
 |---|---|---|---|
 | **R0** | No effect | The action has no effect outside the agent's working context. | Read a file, run a `SELECT`, search, fetch a public page, get the time. |
-| **R1** | Restorable | The effect can be fully restored by the principal with ordinary effort, and no outside party has observed or relied on it. | Edit a file under version control, create a branch, save a draft, add a label, create a private note. |
-| **R2** | Compensable | The prior state cannot be restored, but a known compensating action exists at bounded cost. | Charge a card (refund), book (cancel with fee), merge a PR (revert), create a paid cloud resource (delete; cost already incurred). |
+| **R1** | Restorable | The effect can be fully restored by the principal with ordinary effort, and no outside party has observed or relied on it. | Edit a file whose current version is committed to version control, create a branch, save a draft, create a private note. |
+| **R2** | Compensable | The prior state cannot be restored, but a known compensating action exists at bounded cost. | Charge a card in error (refund it), make a cancellable booking (cancel, paying any fee), merge a PR (revert it; any CI it triggered has already run), create a paid cloud resource (delete it; cost already incurred). |
 | **R3** | Hard to recover | Recovery needs a human, an out-of-band process, or unbounded effort; or the action changes access rights, credentials, availability or physical state. | Change permissions, rotate a secret, delete a running deployment, force-push, apply infrastructure changes, unlock a door. |
 | **R4** | Irreversible | The effect cannot be restored or compensated: a disclosure, destruction of data with no recovery path, or an external consequence that cannot be recalled. | Send a message or email, publish or post publicly, share data with a third party, delete data with no backup, transfer funds with no recall. |
 
@@ -54,7 +54,7 @@ A Reversibility Class describes the **worst plausible recoverable state** after 
 
 ### 4.2 Why not severity? *(informative)*
 
-Severity asks "how bad is it if this goes wrong?" and needs a judgment about the specific situation. Reversibility asks "can we get back?" and is mostly a fact about the action type. The two diverge in useful ways: refunding a $40,000 charge is expensive but recoverable (R2), while a one-line Slack message to the wrong channel is cheap but permanent (R4). Autonomy policies built on reversibility can be enforced without a model in the decision path.
+Severity asks "how bad is it if this goes wrong?" and needs a judgment about the specific situation. Reversibility asks "can we get back?" and is mostly a fact about the action type. The two diverge in useful ways: charging a customer $40,000 by mistake is expensive but compensable (R2), because a refund makes the customer whole at a known cost, while a one-line Slack message to the wrong channel is cheap but permanent (R4). Autonomy policies built on reversibility can be enforced without a model in the decision path.
 
 ## 5. Classification records
 
@@ -84,7 +84,7 @@ A **classification record** assigns classes to the tools of one tool server. Rec
 | `rationale` | yes | One sentence: why this class. |
 | `disclosure` | no | `true` if the tool's effect includes a disclosure (Section 4.1, rule 2). Overrides can never lower such a tool. |
 | `when` | no | Ordered list of conditional rules (Section 5.3). |
-| `compensation` | no | For R1/R2, the tool(s) or process that restore or compensate, e.g. `create_refund`. |
+| `compensation` | for R1/R2 | The tool(s) or process that restore or compensate, e.g. `create_refund` for a card charge. An R1 or R2 entry (including one reached through a `when` rule) **SHOULD** name it; the open registry requires it. The compensation must reverse *this* action and must not depend on the consent of a party outside the principal. |
 | `undo_window` | no | ISO 8601 duration during which restoration or compensation remains possible, e.g. `P180D`. |
 | `review` | no | `draft` (machine-proposed), `reviewed` (checked by one person), or `verified` (checked by two people or by the server's maintainer). Default `draft`. |
 

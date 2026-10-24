@@ -41,6 +41,7 @@ AI-assisted contributions are welcome. Most of this registry was drafted with AI
 - **Pin what you checked.** Put the commit or release you verified against in `server.version`.
 - **Every tool, exact names.** Compare against the server's code (where tools are registered), not only its README.
 - **Ask "what does it overwrite or delete?"** A tool that overwrites or removes data with no history in that system is R4, even if it looks routine. A deployment with backups can lower it with an override; the registry records the default.
+- **Ask "what undoes this, and who has to agree?"** R1 and R2 are claims that an action can be undone, so every R1 or R2 tool (including one lowered by a `when` rule) must name its undo in `compensation`. Check four things: the undo really exists in that system; it reverses *this* action, not a different one (a mistaken charge is undone by a refund, but a refund is not undone by anything the merchant can do alone); nobody outside the principal has to consent; and what it leaves behind (fees, notifications, triggered runs) is known and bounded. If any check fails, raise the class.
 - **Ask "who receives this?"** Anything whose purpose is to deliver content to people or other systems is a disclosure (R4, `disclosure: true`).
 - **Flag what doesn't fit.** If a tool doesn't fit the five classes cleanly, say so in the pull request. That's input for the next version of the spec, not a failure.
 

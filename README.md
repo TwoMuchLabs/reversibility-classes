@@ -12,7 +12,7 @@ Agent permission systems ask *which tools* an agent may use, or *how confident* 
 | **R3** | Hard to recover | Needs a human or out-of-band recovery; changes access, credentials, availability or physical state | Approve each time |
 | **R4** | Irreversible | A disclosure, unrecoverable destruction, or a consequence that can't be recalled | Never autonomous |
 
-Refunding a $40,000 charge is expensive but recoverable: **R2**. A one-line message to the wrong Slack channel is cheap but permanent: **R4**. Severity scores get these backwards; reversibility doesn't.
+Charging a customer $40,000 by mistake is expensive but compensable: refund the charge and the customer is made whole, at a known cost. **R2**. A one-line message to the wrong Slack channel is cheap but permanent: **R4**. Severity scores get these backwards; reversibility doesn't.
 
 ## Why this exists
 
