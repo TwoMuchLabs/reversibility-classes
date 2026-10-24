@@ -16,17 +16,20 @@ tools:
 - name: create_entities
   class: R1
   rationale: New entities can be deleted; existing names are skipped, not overwritten.
-  compensation: delete_entities
+  compensation: delete_entities on the names returned in `entities`, not the requested names, since skipped
+    names belong to pre-existing entities
   review: draft
 - name: create_relations
   class: R1
   rationale: New relations can be deleted.
-  compensation: delete_relations
+  compensation: delete_relations on the relations returned by the call, not the requested ones, since duplicates
+    of existing relations are skipped
   review: draft
 - name: add_observations
   class: R1
   rationale: Added observations can be deleted.
-  compensation: delete_observations
+  compensation: delete_observations on the returned `addedObservations`, not the requested contents, since
+    observations the entity already had are skipped
   review: draft
 - name: delete_entities
   class: R4

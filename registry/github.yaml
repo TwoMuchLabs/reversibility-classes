@@ -107,6 +107,8 @@ tools:
     class: R2
     rationale: The answer marking can be set back to the previous answer, which was readable before the
       change.
+  compensation: discussion_comment_write mark_answer on the previous answer comment, or unmark_answer if
+    there was none
   review: draft
 - name: get_discussion
   class: R0
@@ -198,7 +200,9 @@ tools:
   review: draft
 - name: issue_write
   class: R4
-  rationale: Creating an issue or rewriting its body publishes content to everyone who can see the repository.
+  rationale: Creating an issue or rewriting its body publishes content to everyone who can see the repository,
+    and assigning copilot-swe-agent[bot] starts the Copilot coding agent, which opens a pull request that
+    unassigning does not withdraw.
   disclosure: true
   when:
   - all:
@@ -208,10 +212,13 @@ tools:
       absent: true
     - arg: title
       absent: true
+    - arg: assignees
+      absent: true
     class: R2
-    rationale: State, labels, assignees and similar fields can be set back to their previous values; no
-      new title or body text is published.
-  compensation: issue_write update with the previous values
+    rationale: State, labels, milestone and similar fields can be set back to their previous values; no
+      new title or body text is published and no assignee, such as Copilot, is added.
+  compensation: issue_write update with the previous values; a milestone set where there was none must
+    be cleared on github.com, since the tool ignores milestone 0
   review: draft
 - name: list_issue_fields
   class: R0
@@ -253,7 +260,8 @@ tools:
     equals: update
     class: R2
     rationale: The previous name and color were readable and can be set again.
-  compensation: label_write delete (create) or update with the previous values (update)
+  compensation: label_write delete (create) or update with the previous values (update); a description
+    added where there was none must be cleared on github.com, since the tool ignores an empty description
   review: draft
 - name: list_label
   class: R0
@@ -283,12 +291,15 @@ tools:
   class: R2
   rationale: Changes the user's own subscription to a repository; a subscription can be set again, but
     the tool does not return the previous setting.
-  compensation: manage_repository_notification_subscription with the previous setting
+  compensation: manage_repository_notification_subscription with the previous setting; custom watch settings
+    (for example releases only) can only be restored on github.com
   review: draft
 - name: mark_all_notifications_read
   class: R2
   rationale: Which notifications were unread is not recorded, so they can only be marked unread again
     one by one from a list taken beforehand.
+  compensation: mark each previously unread thread unread again on github.com, from a list_notifications
+    result taken beforehand (the API has no mark-unread endpoint)
   review: draft
 - name: search_orgs
   class: R0
@@ -324,12 +335,17 @@ tools:
     class: R2
     rationale: Field values and view settings can be set back to their previous values, which were readable
       before the change.
+  compensation: projects_write delete_project_item on an item that was not in the project before (adding
+    an existing item returns that item's ID) or delete_project_view on the new view; delete a new project
+    or iteration field on github.com; update_project_item, update_project_items or update_project_view
+    with the previous values
   review: draft
 - name: add_comment_to_pending_review
   class: R1
   rationale: A comment on a pending review is visible only to its author until the review is submitted,
-    and the pending review can be deleted.
-  compensation: pull_request_review_write delete_pending
+    and the comment can be deleted from the pending review.
+  compensation: delete the comment from the pending review on github.com (pull_request_review_write delete_pending
+    also deletes every other comment already in that review)
   review: draft
 - name: add_reply_to_pull_request_comment
   class: R4
@@ -394,7 +410,8 @@ tools:
   review: draft
 - name: update_pull_request
   class: R4
-  rationale: Rewriting a pull request's body publishes new content to everyone who can see the repository.
+  rationale: Rewriting a pull request's body publishes new content to everyone who can see the repository,
+    and requesting copilot-pull-request-reviewer[bot] as a reviewer makes Copilot post a review.
   disclosure: true
   when:
   - all:
@@ -402,16 +419,18 @@ tools:
       absent: true
     - arg: title
       absent: true
+    - arg: reviewers
+      absent: true
     class: R2
-    rationale: State, labels, assignees and similar fields can be set back to their previous values; no
-      new title or body text is published.
+    rationale: State, draft status, base branch and maintainer edits can be set back to their previous values;
+      no new title or body text is published and no reviewer, such as Copilot, is requested.
   compensation: update_pull_request with the previous values
   review: draft
 - name: update_pull_request_branch
-  class: R2
-  rationale: Adds a merge commit to the head branch that can be reverted, but it may already have triggered
-    checks or been pulled by others.
-  compensation: revert commit
+  class: R3
+  rationale: Reverting the merge of the base into the head branch makes the pull request remove the base's
+    changes instead of restoring it, so the only undo is force-pushing the head branch back to its previous
+    commit, which may be a contributor's fork and may already have been pulled.
   review: draft
 - name: create_branch
   class: R1

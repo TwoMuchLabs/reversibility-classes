@@ -30,18 +30,22 @@ tools:
   review: draft
 - name: git_commit
   class: R1
-  rationale: A local commit that has not been pushed can be undone with a reset.
-  compensation: git reset to the previous commit
+  rationale: A local commit that has not been pushed can be undone with a soft reset, which restores HEAD
+    and leaves the committed changes staged as they were.
+  compensation: git reset --soft HEAD~1 (git update-ref -d HEAD for a first commit); a plain or mixed reset
+    would also unstage the changes
   review: draft
 - name: git_add
-  class: R1
-  rationale: Staging can be undone by unstaging.
-  compensation: git_reset
+  class: R3
+  rationale: Staging replaces any previously staged version of the paths, which survives only as a dangling
+    blob until git gc prunes it, and git_reset is no undo because it unstages the whole index, not just
+    these paths.
   review: draft
 - name: git_reset
-  class: R1
-  rationale: Unstages changes and leaves the working tree untouched; the files can be staged again.
-  compensation: git_add
+  class: R3
+  rationale: Resetting the whole index discards staged versions that differ from the working tree, which
+    git_add cannot bring back because it stages the working-tree version; they survive only as dangling
+    blobs until git gc prunes them.
   review: draft
 - name: git_log
   class: R0
@@ -53,10 +57,11 @@ tools:
   compensation: delete the branch
   review: draft
 - name: git_checkout
-  class: R1
-  rationale: Switching branches can be reversed by checking out the previous branch; git refuses checkouts
-    that would overwrite uncommitted changes.
-  compensation: git_checkout the previous branch
+  class: R4
+  rationale: git checkout silently overwrites ignored untracked files that the target branch tracks (the
+    documented --overwrite-ignore default), and checking out the previous branch then deletes them, so
+    their content is lost with no copy in git.
+  compensation: git_checkout the previous branch (does not restore overwritten ignored files)
   review: draft
 - name: git_show
   class: R0

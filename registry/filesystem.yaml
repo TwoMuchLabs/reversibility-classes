@@ -31,20 +31,23 @@ tools:
     so an overwrite cannot be restored.
   review: draft
 - name: edit_file
-  class: R1
-  rationale: The tool returns a diff of every edit, so the previous content can be restored by applying
-    the inverse edits.
+  class: R4
+  rationale: The server decodes the whole file as UTF-8 and writes it back, replacing every invalid byte
+    with U+FFFD and converting minority line endings, changes the returned diff does not show, so inverse
+    edits cannot restore a non-UTF-8 or mixed-ending file and the server keeps no copy.
   when:
   - arg: dryRun
     equals: true
     class: R0
     rationale: A dry run only previews the diff.
-  compensation: edit_file with the inverse edits
+  compensation: edit_file with the inverse edits (restores only UTF-8 files with uniform line endings)
   review: draft
 - name: create_directory
   class: R1
   rationale: A new directory can be removed; existing directories are left untouched.
-  compensation: remove the directory
+  compensation: remove (rmdir) only the directories on the path that did not exist before the call, checked
+    beforehand with get_file_info; the tool reports success for an existing directory and creates missing
+    parents
   review: draft
 - name: list_directory
   class: R0
@@ -58,7 +61,8 @@ tools:
   class: R1
   rationale: Fails if the destination exists, so nothing is overwritten; moving it back restores the prior
     state.
-  compensation: move_file back to the original path
+  compensation: move_file from the destination back to the resolved source path (when the source was a
+    symlink the server moves its target, not the link)
   review: draft
 - name: search_files
   class: R0

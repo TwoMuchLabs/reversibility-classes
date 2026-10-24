@@ -23,9 +23,11 @@ tools:
     INSERT can be an upsert (INSERT OR REPLACE, ON CONFLICT DO UPDATE) that overwrites rows.'
   review: draft
 - name: create_table
-  class: R1
-  rationale: A new table can be dropped to restore the prior state.
-  compensation: DROP TABLE
+  class: R2
+  rationale: A new table can be dropped, but an AUTOINCREMENT column leaves behind a sqlite_sequence table
+    that SQLite refuses to drop.
+  compensation: write_query DROP TABLE <name>, only if the table did not exist before the call (CREATE TABLE
+    IF NOT EXISTS on an existing table does nothing, so dropping it would destroy data)
   review: draft
 - name: list_tables
   class: R0
@@ -36,6 +38,8 @@ tools:
   rationale: Reads the schema.
   review: draft
 - name: append_insight
-  class: R1
-  rationale: Appends to an in-memory memo resource visible only to the client for the session.
+  class: R2
+  rationale: The server has no tool to remove an insight from the in-memory memo, so the only undo is restarting
+    the server, which clears every insight and needs the others appended again.
+  compensation: restart the server, then append_insight each earlier insight read from memo://insights beforehand
   review: draft
