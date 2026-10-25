@@ -17,14 +17,20 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
-  drift:
+  # Runs third-party server releases, so it holds no write token, and checkout leaves no credentials on disk.
+  check:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: read
+    outputs:
+      drift: ${{ steps.check.outputs.drift }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -40,10 +46,27 @@ jobs:
           python scripts/check_drift.py drift-report.md
           echo "drift=$?" >> "$GITHUB_OUTPUT"
           [ -f drift-report.md ] && cat drift-report.md >> "$GITHUB_STEP_SUMMARY" || true
-      - name: Open or update the drift issue
+      - uses: actions/upload-artifact@v4
         if: steps.check.outputs.drift == '1'
+        with:
+          name: drift-report
+          path: drift-report.md
+
+  # Only this job can write issues, and it runs no third-party code.
+  report:
+    needs: check
+    if: needs.check.outputs.drift == '1'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: drift-report
+      - name: Open or update the drift issue
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           gh label create drift --color FBCA04 --description "Registry no longer matches a server's latest release" 2>/dev/null || true
           existing=$(gh issue list --label drift --state open --json number --jq '.[0].number')
