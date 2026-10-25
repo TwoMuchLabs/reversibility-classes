@@ -13,7 +13,7 @@ The must-fix and should-fix items from that audit have already been applied.
 4. ~~**`git/git_add` is R1**~~ Resolved: now R3 (see below).
 5. **`playwright/browser_hover` is R0**, but pages can act on mouse-over.
 6. **`github/create_branch` is R1**, but pushes can trigger workflows — and running a workflow directly (`actions_run_trigger`) is R4.
-7. ~~**`filesystem/edit_file` is R1**~~ Resolved: now R4 (see below). The general question stands: should restorability that depends on the caller keeping something count?
+7. ~~**`filesystem/edit_file` is R1**~~ Resolved: now R4 (see below). The general question is answered by the v0.2 definition of *restorable* (SPEC section 3): the prior state must be held by the system or captured before the call (SPEC 5.6). A diff that only the agent holds counts once a gateway captures it.
 
 ## What counts as public
 8. **Secret gists (`github/create_gist` without `public`) are R1**, but anyone with the URL can read one.

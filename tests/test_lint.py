@@ -107,3 +107,9 @@ def test_undo_claims_name_their_undo(entry):
     assert comp.lower() != entry.name.lower(), (
         f"{entry.server}/{entry.name} names itself as its own compensation; name the reversing operation."
     )
+
+
+@pytest.mark.parametrize("entry", ENTRIES, ids=lambda e: f"{e.server}/{e.name}")
+def test_open_registry_has_no_preimage(entry):
+    """Pre-image capture is something a deployment does, not a property of the tool (SPEC 5.6)."""
+    assert "preimage" not in entry.raw, f"{entry.server}/{entry.name}: preimage belongs in a deployment override"

@@ -45,6 +45,13 @@ def validate_record(record: dict, origin: str = "<record>") -> None:
             seen.add(tool["name"])
             if tool.get("disclosure") and tool["class"] != "R4":
                 problems.append(f"tools/{tool['name']}: disclosure tools must have base class R4")
+            if "preimage" in tool:
+                # Pre-image capture is a claim of restorability (SPEC 5.6): it makes a tool R1,
+                # never lower, and it cannot reverse a disclosure.
+                if tool["class"] != "R1" or any(r.get("class") != "R1" for r in tool.get("when", [])):
+                    problems.append(f"tools/{tool['name']}: an entry with preimage must be R1, with no other classes in its rules")
+                if tool.get("disclosure"):
+                    problems.append(f"tools/{tool['name']}: preimage cannot apply to a disclosure; capturing state does not un-disclose it")
     if problems:
         raise RecordError(f"{origin}:\n  " + "\n  ".join(problems))
 

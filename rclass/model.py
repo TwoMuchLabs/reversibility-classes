@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Mapping
 from enum import IntEnum
 
 
@@ -53,6 +54,22 @@ class Classification:
     server: str
     tool: str
     rule_index: int | None = None  # index of the matching `when` rule, if any
+    # Set when a pre-image capture override lowered the class (SPEC 5.6). The gateway must
+    # capture this state before executing; if it cannot, it must use `unconfirmed()` instead.
+    preimage: Mapping[str, str] | None = None
+    fallback: "RClass | None" = None
+
+    def unconfirmed(self) -> "Classification":
+        """The classification to use when the required pre-image capture did not succeed."""
+        if self.preimage is None:
+            return self
+        return Classification(
+            self.fallback if self.fallback is not None else RClass.R4,
+            "preimage-unconfirmed",
+            f"Pre-image capture not confirmed, so the override does not apply. ({self.rationale})",
+            self.server,
+            self.tool,
+        )
 
     def to_dict(self) -> dict:
         return {
@@ -63,4 +80,5 @@ class Classification:
             "server": self.server,
             "tool": self.tool,
             "rule_index": self.rule_index,
+            **({"preimage": dict(self.preimage)} if self.preimage is not None else {}),
         }

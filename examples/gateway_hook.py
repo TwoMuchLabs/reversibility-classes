@@ -13,12 +13,27 @@ from rclass import Decision, Session
 session = Session()  # uses the bundled open registry
 
 
+def capture_preimage(server_id: str, params: dict) -> str | None:
+    """Save the state the call is about to change, and return where it was saved.
+
+    Replace with your own: copy the file, dump the rows, export the config. Return None on
+    any failure, and the gateway falls back to the stricter class.
+    """
+    return None
+
+
 def gate(server_id: str, request: dict, ask_human) -> dict | None:
     """Return None to let the call through, or a JSON-RPC error to block it."""
     if request.get("method") != "tools/call":
         return None
     params = request.get("params", {})
     classification, decision = session.check(server_id, params.get("name", ""), params.get("arguments"))
+
+    # A pre-image override (SPEC 5.6) applies only once the prior state is safely captured.
+    preimage_ref = None
+    if classification.preimage is not None:
+        preimage_ref = capture_preimage(server_id, params)  # your snapshot; None if it failed
+        classification, decision = session.confirm_preimage(classification, captured=preimage_ref is not None)
 
     approver = None
     if decision not in (Decision.ALLOW, Decision.ALLOW_AND_NOTIFY):
@@ -33,7 +48,7 @@ def gate(server_id: str, request: dict, ask_human) -> dict | None:
                     "data": classification.to_dict(),
                 },
             }
-    session.record(classification, decision, approved_by=approver)
+    session.record(classification, decision, approved_by=approver, preimage_ref=preimage_ref)
     return None
 
 

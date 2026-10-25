@@ -107,8 +107,11 @@ def classify(
             # that, in this deployment, it reaches no one outside the principal (SPEC 5.5).
             asserts_private = ov_entry.raw.get("disclosure") is False
             if ov_class > rclass or (ov_class < rclass and (not disclosure or asserts_private)):
+                lowered_by_capture = ov_class < rclass and "preimage" in ov_entry.raw
                 result = Classification(
-                    ov_class, "override", f"{ov_rationale} (override: {reason})", server, tool, ov_rule
+                    ov_class, "override", f"{ov_rationale} (override: {reason})", server, tool, ov_rule,
+                    preimage=ov_entry.raw["preimage"] if lowered_by_capture else None,
+                    fallback=rclass if lowered_by_capture else None,
                 )
         return result
 
@@ -116,7 +119,11 @@ def classify(
     if ov is not None:  # a deployment classifying a tool the open registry doesn't cover
         ov_entry, reason = ov
         ov_class, ov_rationale, ov_rule = _evaluate(ov_entry, args)
-        return Classification(ov_class, "override", f"{ov_rationale} (override: {reason})", server, tool, ov_rule)
+        cap = ov_entry.raw.get("preimage")
+        return Classification(
+            ov_class, "override", f"{ov_rationale} (override: {reason})", server, tool, ov_rule,
+            preimage=cap, fallback=RClass.R4 if cap else None,  # unconfirmed capture fails closed
+        )
 
     default = reg.default_for(server)
     if default is not None:

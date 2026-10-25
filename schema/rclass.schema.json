@@ -133,6 +133,33 @@
             "reviewed",
             "verified"
           ]
+        },
+        "preimage": {
+          "type": "object",
+          "description": "Deployment overrides only (SPEC 5.6): the deployment captures the prior state before each call, which lets it declare the tool R1. Never used in the open registry.",
+          "required": [
+            "captures",
+            "restore",
+            "retention"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "captures": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Exactly what prior state is captured, in full, before the call."
+            },
+            "restore": {
+              "type": "string",
+              "minLength": 1,
+              "description": "How the principal writes the captured state back, through an interface it already holds."
+            },
+            "retention": {
+              "type": "string",
+              "pattern": "^P(?!$)(\\d+Y)?(\\d+M)?(\\d+W)?(\\d+D)?(T(?=\\d)(\\d+H)?(\\d+M)?(\\d+S)?)?$",
+              "description": "ISO 8601 duration the capture is kept; restoration is possible only within it."
+            }
+          }
         }
       }
     },

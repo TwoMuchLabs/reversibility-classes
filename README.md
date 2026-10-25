@@ -7,7 +7,7 @@ Agent permission systems ask *which tools* an agent may use, or *how confident* 
 | Class | Name | Test | Default policy |
 |---|---|---|---|
 | **R0** | No effect | Nothing changes outside the agent's working context | Act |
-| **R1** | Restorable | Fully restorable with ordinary effort; nobody outside saw it | Act, then notify |
+| **R1** | Restorable | The prior state is recorded, you can write it back yourself, and nobody outside saw it | Act, then notify |
 | **R2** | Compensable | Can't be restored, but a known fix exists at bounded cost | Approve, or act within a budget |
 | **R3** | Hard to recover | Needs a human or out-of-band recovery; changes access, credentials, availability or physical state | Approve each time |
 | **R4** | Irreversible | A disclosure, unrecoverable destruction, or a consequence that can't be recalled | Never autonomous |
@@ -88,7 +88,9 @@ session.record(c, decision)
 
 [`examples/gateway_hook.py`](examples/gateway_hook.py) shows how to gate MCP `tools/call` requests in a proxy in about 40 lines.
 
-Your environment can be safer than the defaults. If you snapshot a database nightly, publish a **deployment override** that lowers `DROP TABLE` from R4 to R3, with the reason logged on every decision. Overrides can never lower a disclosure.
+**Make actions restorable.** If your gateway saves a file's current content before letting the agent overwrite it, `write_file` is restorable in your deployment: declare a `preimage` override and it becomes R1, with the capture checked before every call and its reference logged ([SPEC 5.6](SPEC.md#56-pre-image-capture)). A record of what changed is not enough on its own; you also need a way to write the old state back, before anyone else has seen the change.
+
+Your environment can be safer than the defaults. If you keep point-in-time database backups, publish a **deployment override** that lowers `DROP TABLE` from R4 to R3 (restoring needs a DBA, so not R1), with the reason logged on every decision. A nightly snapshot is not enough on its own: it loses whatever changed since. Overrides can never lower a disclosure.
 
 ## Status and roadmap
 

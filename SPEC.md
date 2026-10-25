@@ -1,6 +1,6 @@
 # Reversibility Classes for Agent Actions
 
-**Version:** 0.1.0 (draft)
+**Version:** 0.2.0 (draft)
 **Status:** Request for comments
 **Editor:** Deepak Waghmare
 **License:** This document is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
@@ -26,7 +26,13 @@ Sections marked *(informative)* explain or advise and are not requirements.
 - **Action.** A single tool invocation with concrete arguments, e.g. one MCP `tools/call`.
 - **Principal.** The person or organization on whose behalf the agent acts, and who owns the systems it acts on.
 - **Effect.** Any change the action causes outside the agent's own working context: to stored data, to money, to access rights, to physical state, or to what another party knows.
-- **Restore.** Return the affected state to exactly what it was before the action.
+- **Prior state.** The state an action's effect replaces or removes, in full: the content itself, not a record that a change happened.
+- **Restore.** Return the affected state to exactly the prior state. An effect is **restorable** only when all three of these hold:
+  1. **Recorded.** The prior state is held in full, either by the system acted on (version history, a trash folder, snapshots the principal can read) or because it was captured before the action (Section 5.6).
+  2. **Writable.** The principal can write that state back through an interface it already holds. A restoration that needs a person outside the principal, a support request, an out-of-band process, or another party's consent does not count.
+  3. **Unobserved.** No party outside the principal has seen, received or acted on the changed state before it is restored.
+
+  A record of an action is not a means of restoring it. An audit log that shows a message was sent documents a disclosure; it does not reverse it. A record shows *what* the prior state was; restoration also needs a way to write it back and an effect nobody else has relied on.
 - **Compensate.** Take a further, known action that leaves the world in a state the principal accepts as equivalent, at a bounded and knowable cost (a refund, a cancellation, a revert commit).
 - **Disclosure.** An effect through which information reaches a party outside the principal's control. A disclosure cannot be restored: deleting a sent message does not un-send its notification. In v0.1, an action is a disclosure when its *purpose* is to deliver content to people (a message, comment, email, issue, review or publication) or to place content where people outside the principal can read it (a public repository, a public page). A state change that only *incidentally* notifies someone (assigning a ticket, changing a status, adding a label) is classified by the recoverability of the state change, not as a disclosure. Distinguishing internal from external audiences is an open question (Section 12).
 - **Classifier.** Any component (gateway, proxy, framework, library) that assigns a Reversibility Class to an action before it executes.
@@ -38,9 +44,9 @@ A Reversibility Class describes the **worst plausible recoverable state** after 
 | Class | Name | Test | Typical examples |
 |---|---|---|---|
 | **R0** | No effect | The action has no effect outside the agent's working context. | Read a file, run a `SELECT`, search, fetch a public page, get the time. |
-| **R1** | Restorable | The effect can be fully restored by the principal with ordinary effort, and no outside party has observed or relied on it. | Edit a file whose current version is committed to version control, create a branch, save a draft, create a private note. |
+| **R1** | Restorable | The effect is restorable (Section 3): the prior state is recorded in full, the principal can write it back through an interface it already holds, and no outside party has observed or relied on the change. | Edit a file whose current version is committed to version control, create a branch, save a draft, create a private note. |
 | **R2** | Compensable | The prior state cannot be restored, but a known compensating action exists at bounded cost. | Charge a card in error (refund it), make a cancellable booking (cancel, paying any fee), merge a PR (revert it; any CI it triggered has already run), create a paid cloud resource (delete it; cost already incurred). |
-| **R3** | Hard to recover | Recovery needs a human, an out-of-band process, or unbounded effort; or the action changes access rights, credentials, availability or physical state. | Change permissions, rotate a secret, delete a running deployment, force-push, apply infrastructure changes, unlock a door. |
+| **R3** | Hard to recover | Recovery needs a human, an out-of-band process, or unbounded effort, including when the prior state is recorded but the principal cannot write it back itself; or the action changes access rights, credentials, availability or physical state. | Change permissions, rotate a secret, delete a running deployment, force-push, apply infrastructure changes, unlock a door. |
 | **R4** | Irreversible | The effect cannot be restored or compensated: a disclosure, destruction of data with no recovery path, or an external consequence that cannot be recalled. | Send a message or email, publish or post publicly, share data with a third party, delete data with no backup, transfer funds with no recall. |
 
 ### 4.1 Classification rules
@@ -55,6 +61,19 @@ A Reversibility Class describes the **worst plausible recoverable state** after 
 ### 4.2 Why not severity? *(informative)*
 
 Severity asks "how bad is it if this goes wrong?" and needs a judgment about the specific situation. Reversibility asks "can we get back?" and is mostly a fact about the action type. The two diverge in useful ways: charging a customer $40,000 by mistake is expensive but compensable (R2), because a refund makes the customer whole at a known cost, while a one-line Slack message to the wrong channel is cheap but permanent (R4). Autonomy policies built on reversibility can be enforced without a model in the decision path.
+
+### 4.3 Recorded is not restorable *(informative)*
+
+Most systems record far more than they let anyone restore. The three conditions in Section 3 separate the cases:
+
+| Recorded in full? | Principal can write it back? | Seen or relied on outside? | Class | Example |
+|---|---|---|---|---|
+| yes | yes | no | R1 | Editing a document with version history; `write_file` behind a gateway that snapshots the file first (Section 5.6) |
+| yes | no, needs a human or special tooling | no | R3 | `git_add` over a staged change: the old version survives as an unreachable object until garbage collection, and recovering it needs `git fsck` |
+| yes | yes | yes | R4 | A message to the wrong channel: the workspace logs it and the sender can delete it, but readers have already seen it |
+| no | — | — | R2, R3 or R4 | An overwrite with no history: R2 if a known compensation exists, R3 or R4 otherwise |
+
+The first row is what makes this vocabulary a design tool and not only a label. Capturing the prior state before an action is often cheap, and it changes the class of the action, and with it what the agent may do alone.
 
 ## 5. Classification records
 
@@ -127,9 +146,33 @@ A **registry** is a collection of classification records. This repository mainta
 
 ### 5.5 Deployment overrides
 
-A deployment **MAY** publish an override record with the same shape, scoped to its environment, to raise any class or to lower a non-disclosure class with a stated reason (e.g. "nightly snapshot with 30-day retention"). Overrides **MUST** be logged with every decision they affect.
+A deployment **MAY** publish an override record with the same shape, scoped to its environment, to raise any class or to lower a non-disclosure class with a stated reason (e.g. "point-in-time backups with 30-day retention"). Overrides **MUST** be logged with every decision they affect.
 
 Some tools are disclosures only because their destination *may* be public: a repository, a wiki page. An override **MAY** lower such a tool only by setting `disclosure: false` on its entry, which asserts that in this deployment the destination is readable by no one outside the principal (for example, "this agent can only reach private repositories"). The assertion and its reason **MUST** be logged with every decision. Without that explicit assertion, an override **MUST NOT** lower a disclosure tool.
+
+### 5.6 Pre-image capture
+
+A deployment **MAY** make an action restorable by capturing its prior state (its *pre-image*) before each call: a gateway reads the file before it is overwritten, dumps the rows before a `DELETE`, or snapshots a configuration before it changes. It declares this in an override entry with a `preimage` object:
+
+```yaml
+- name: write_file
+  class: R1
+  rationale: The gateway copies the file's current content before every write.
+  preimage:
+    captures: full content and mode of the file at `path`, or that it did not exist
+    restore: copy the captured file back with the gateway's restore command
+    retention: P30D
+```
+
+The override is subject to every rule in Section 5.5, and also:
+
+1. **Capture before execution.** The gateway **MUST** capture the pre-image and confirm the capture succeeded before it executes the call. If the capture fails or cannot be confirmed, the classifier **MUST** use the class the action would have without this override.
+2. **R1 only.** An entry with `preimage` **MUST** have class R1 and no rule that sets another class. Capturing state is a claim of restorability, nothing more.
+3. **Not for disclosure.** Capturing state does not un-disclose anything. An entry with `preimage` **MUST NOT** be a disclosure, and `preimage` **MUST NOT** be used to lower a disclosure tool.
+4. **Only the state captured.** The override **MUST NOT** be declared for a tool whose effect can reach beyond the captured state: other files, money, access rights, triggered automation, or other parties. Where that depends on arguments, the override **SHOULD** use `when` rules to confine itself to argument forms whose effect the capture fully covers.
+5. **Recorded with every decision.** A reference to the captured pre-image **MUST** be logged with the action. Restoration is possible only within `retention`; after that, the action's effect is no longer restorable.
+
+The open registry describes tools as they come, so its records **MUST NOT** contain `preimage`.
 
 ## 6. Unclassified tools: fail closed
 
@@ -190,6 +233,7 @@ A classifier conforms to v0.1 if it:
 3. Applies the fail-closed rule (Section 6) and uses the annotation mapping (Section 7) only for trusted servers.
 4. Never assigns a class lower than the highest applicable record, except by a logged deployment override that does not concern disclosure.
 5. Meets the aggregation minimum in Section 9.
+6. Honors a `preimage` override only after confirming the capture, falls back otherwise, and logs the pre-image reference (Section 5.6).
 
 A classification record conforms if it validates against the schema and every tool entry has a class and a rationale.
 
@@ -205,4 +249,5 @@ Comments are welcome as GitHub issues.
 
 ## Appendix A. Change log
 
+- **0.2.0 (draft)** — Defines *restorable* by three conditions: recorded, writable by the principal, unobserved (Section 3). Adds Section 4.3 on recorded versus restorable and Section 5.6 on pre-image capture. R1 and R2 entries name their compensation (Section 5.2).
 - **0.1.0** — First public draft.

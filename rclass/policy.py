@@ -51,10 +51,32 @@ class Session:
         c = classify(server, tool, args, registry=self.registry, **kwargs)
         return c, self.policy[c.rclass]
 
-    def record(self, classification: Classification, decision: Decision, approved_by: str | None = None) -> None:
-        """Append an executed action to the audit log and update the effective class."""
+    def confirm_preimage(self, classification: Classification, captured: bool) -> tuple[Classification, Decision]:
+        """Call after attempting the capture a classification requires (SPEC 5.6). If it failed,
+        the override does not apply and the stricter class and decision are returned."""
+        c = classification if captured or classification.preimage is None else classification.unconfirmed()
+        return c, self.policy[c.rclass]
+
+    def record(
+        self,
+        classification: Classification,
+        decision: Decision,
+        approved_by: str | None = None,
+        preimage_ref: str | None = None,
+    ) -> None:
+        """Append an executed action to the audit log and update the effective class.
+
+        An action classified through pre-image capture must be recorded with a reference to the
+        captured state, or it cannot be restored (SPEC 5.6)."""
+        if classification.preimage is not None and not preimage_ref:
+            raise ValueError(
+                f"{classification.server}/{classification.tool} relies on pre-image capture; "
+                "record it with preimage_ref, or record classification.unconfirmed() instead."
+            )
         entry = classification.to_dict()
         entry["decision"] = decision.value
         entry["approved_by"] = approved_by
+        if preimage_ref:
+            entry["preimage_ref"] = preimage_ref
         self.log.append(entry)
         self.effective = max(self.effective, classification.rclass)

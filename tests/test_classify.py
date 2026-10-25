@@ -195,3 +195,61 @@ def test_invalid_records_rejected(mutate, message):
     mutate(rec)
     with pytest.raises(RecordError, match=message):
         validate_record(rec)
+
+
+# -- pre-image capture (SPEC 5.6) -------------------------------------------
+
+PREIMAGE = {"captures": "the full table, schema and rows", "restore": "reload the dump with psql", "retention": "P30D"}
+
+
+def _capture_override(name="wipe", **extra):
+    return _override([{"name": name, "class": "R1", "rationale": "Prior state captured.", "preimage": PREIMAGE, **extra}])
+
+
+def test_preimage_lowers_to_r1_and_carries_the_capture(reg):
+    reg.add_override(_capture_override(), "gateway dumps the table before each call")
+    c = classify("db", "wipe", registry=reg)
+    assert c.rclass is RClass.R1 and c.preimage == PREIMAGE and c.fallback is RClass.R4
+
+
+def test_unconfirmed_capture_falls_back_to_the_registry_class(reg):
+    reg.add_override(_capture_override(), "gateway dumps the table before each call")
+    s = Session(registry=reg)
+    c, _ = s.check("db", "wipe")
+    c2, d2 = s.confirm_preimage(c, captured=False)
+    assert c2.rclass is RClass.R4 and c2.source == "preimage-unconfirmed" and d2 is Decision.NEVER_AUTONOMOUS
+    c3, d3 = s.confirm_preimage(c, captured=True)
+    assert c3.rclass is RClass.R1 and d3 is Decision.ALLOW_AND_NOTIFY
+
+
+def test_preimage_actions_must_be_recorded_with_a_reference(reg):
+    reg.add_override(_capture_override(), "gateway dumps the table before each call")
+    s = Session(registry=reg)
+    c, d = s.check("db", "wipe")
+    with pytest.raises(ValueError):
+        s.record(c, d)
+    s.record(c, d, preimage_ref="s3://snapshots/wipe-0001.sql")
+    assert s.log[-1]["preimage_ref"].endswith("0001.sql") and s.log[-1]["preimage"] == PREIMAGE
+
+
+def test_preimage_cannot_lower_a_disclosure(reg):
+    reg.add_override(_capture_override("send"), "we log every message")
+    assert classify("db", "send", registry=reg).rclass is RClass.R4
+
+
+def test_preimage_entry_must_be_r1(reg):
+    bad = _override([{"name": "wipe", "class": "R2", "rationale": "x", "preimage": PREIMAGE}])
+    with pytest.raises(RecordError):
+        reg.add_override(bad, "x")
+
+
+def test_preimage_entry_cannot_be_a_disclosure():
+    bad = _override([{"name": "send", "class": "R1", "rationale": "x", "disclosure": True, "preimage": PREIMAGE}])
+    with pytest.raises(RecordError):
+        validate_record(bad)
+
+
+def test_unknown_tool_with_unconfirmed_capture_fails_closed(reg):
+    reg.add_override(_capture_override("internal_write"), "in-house tool, gateway snapshots")
+    c = classify("db", "internal_write", registry=reg)
+    assert c.rclass is RClass.R1 and c.unconfirmed().rclass is RClass.R4
