@@ -5,7 +5,7 @@ abstract: "A five-level classification (R0-R4) of how recoverable an AI agent's 
 authors:
   - family-names: Waghmare
     given-names: Deepak
-version: 0.6.0
+version: 0.7.0
 date-released: 2026-10-25
 license: Apache-2.0
 repository-code: "https://github.com/TwoMuchLabs/reversibility-classes"
