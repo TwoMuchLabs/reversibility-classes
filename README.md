@@ -46,12 +46,14 @@ Registry classes are drafts: checked against source by their author, not yet rev
 What it promises:
 
 - **Worst case, not best case.** A tool is counted at the highest class any of its arguments can reach. Unknown tools and servers count as R4, and a server's own annotations are shown as a hint, never trusted.
-- **No guessing who a server is.** A server is matched to a registry record by the package or image it runs, or a hosted URL. Tool names alone never count, because a server chooses its own; if the names look familiar, it suggests `--assume`.
+- **No guessing who a server is.** A server is matched to a registry record only when its config runs that package or image as itself, or points at its hosted URL. Anything that could make something else run counts as unrecognised: `npx -p` or `uvx --from` running a different command, a docker entrypoint or command override, a custom registry or source, a launcher from a relative or project path, or an `env` that sets `PATH`, `NODE_OPTIONS`, `PYTHONPATH` and the like. Tool names alone never count, because a server chooses its own; if they look familiar, it suggests `--assume`, which only applies to a server it starts and lists.
 - **Minimal environment.** Each server gets only what the official MCP SDKs pass by default (`PATH`, `HOME`, `USER`, …), proxy and certificate settings, and its own `env` from the config. Your cloud keys and tokens stay out. `--inherit-env` passes everything.
 - **Repository configs need consent.** A `.mcp.json`, `.vscode/mcp.json` or `.cursor/mcp.json` belongs to whoever wrote the repository. `rclass scan` asks before starting its servers (or needs `--yes`), and honours what you already approved or disabled in Claude Code.
 - **No secrets in the output.** Arguments, environment values and what a failing server writes are not printed. `--show-server-errors` shows server output with your config's values and common token shapes redacted (best effort).
-- **Built for hostile servers.** Replies are shape-checked, lines and tool lists are capped, and each server runs under a hard deadline in its own process group, killed with its children afterwards.
+- **Built for hostile servers.** Replies are shape-checked, lines and tool lists are capped, and each server runs under a hard deadline in its own process group, which is killed afterwards. (A child that detaches into a new session of its own can outlive it; run scans of untrusted configs in a container.)
 - **Drift is flagged.** If your server offers tools the record doesn't list, they count as R4 and are named; `--write-drafts DIR` turns them into a starting record to [contribute](CONTRIBUTING.md).
+
+Starting a server runs the command your config names, exactly as your client would, so only start configs you trust.
 
 **In CI, scan without starting anything.** `--list` reads the config and reports the registry's classes for every server it recognises, so a pull request can't run code on your CI machine:
 
@@ -59,7 +61,9 @@ What it promises:
 rclass scan .mcp.json --list --fail-on R4
 ```
 
-Exit codes: `0` ok · `1` something reachable is at or above the threshold (an unidentified server counts as R4) · `2` usage or config error · `3` the scan was incomplete, so the gate can't pass.
+Exit codes: `0` ok · `1` something reachable is at or above the threshold (an unidentified server counts as R4) · `2` usage error · `3` the scan was incomplete (a server couldn't be scanned, or its config entry is invalid), so the gate can't pass.
+
+`--list` can't see version drift: it applies the record's classes to whatever version the config pins. Run a full scan somewhere you trust (a developer machine, or a scheduled job) to catch tools a newer release added.
 
 ## Why this exists
 

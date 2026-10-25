@@ -13,9 +13,16 @@ from .model import RClass
 from .registry import RecordError, Registry, read_record_file, stats, validate_record
 
 
+class UsageError(Exception):
+    """A mistake in how rclass was called. Reported with exit code 2."""
+
+
 def _registry(paths: list[str] | None, overrides: list[str] | None = None, extend: bool = True) -> Registry:
     """The bundled registry plus any extra record paths (SPEC 5.4: the highest class across them wins).
     With extend=False, the given paths replace the bundled registry."""
+    for p in paths or []:
+        if not Path(p).exists():
+            raise UsageError(f"--registry path not found: {p}")
     if paths and not extend:
         return Registry.from_paths(paths)
     reg = Registry.bundled()
@@ -27,7 +34,7 @@ def _registry(paths: list[str] | None, overrides: list[str] | None = None, exten
         rec = read_record_file(Path(p))
         reason = (rec.get("server") or {}).get("notes")
         if not reason:
-            raise SystemExit(f"{p}: an override must say why in server.notes; it is logged with every decision (SPEC 5.5)")
+            raise UsageError(f"{p}: an override must say why in server.notes; it is logged with every decision (SPEC 5.5)")
         reg.add_override(rec, reason, p)
     return reg
 
@@ -87,7 +94,7 @@ def _parse_assume(values: list[str] | None) -> dict[str, str]:
     for v in values or []:
         key, sep, rec = v.partition("=")
         if not sep or not key or not rec:
-            raise SystemExit(f"--assume takes SERVER=RECORD, e.g. --assume my-git=git (got {v!r})")
+            raise UsageError(f"--assume takes SERVER=RECORD, e.g. --assume my-git=git (got {v!r})")
         out[key] = rec
     return out
 
@@ -119,6 +126,17 @@ def cmd_scan(ns: argparse.Namespace) -> int:
     if not servers:
         print(f"No MCP servers configured in {', '.join(map(str, configs))}.", file=sys.stderr)
         return EXIT_USAGE
+    unmatched = [k for k in assume if not any(s.key == k or s.key.split("/")[-1] == k for s in servers)]
+    if unmatched:
+        print(f"--assume names no configured server: {', '.join(unmatched)}", file=sys.stderr)
+        return EXIT_USAGE
+    if assume and ns.list:
+        print("--assume cannot be combined with --list: an assumption is only checked against a running server.",
+              file=sys.stderr)
+        return EXIT_USAGE
+    if ns.timeout <= 0:
+        print("--timeout must be a positive number of seconds", file=sys.stderr)
+        return EXIT_USAGE
     if ns.server:
         chosen = [s for s in servers if s.key in ns.server or s.key.split("/")[-1] in ns.server]
         if not chosen:
@@ -141,7 +159,8 @@ def cmd_scan(ns: argparse.Namespace) -> int:
             consent = False
 
     if not ns.json:
-        local = [s for s in servers if not s.remote and not s.disabled and not s.config_error]
+        local = [s for s in servers if not s.remote and not s.disabled and not s.config_error and not s.needs
+                 and (consent or s.approved or not s.project)]
         if start and local:
             print(f"Starting {len(local)} local server{'s' if len(local) != 1 else ''} to list their tools. "
                   "Each gets only the environment MCP clients pass by default"
@@ -235,7 +254,7 @@ def main(argv: list[str] | None = None) -> int:
     sc.add_argument("--details", action="store_true", help="list every tool with its class")
     sc.add_argument("--json", action="store_true", help="machine-readable output")
     sc.add_argument("--timeout", type=float, default=60.0, help="seconds per server (default 60)")
-    sc.add_argument("--fail-on", metavar="CLASS", choices=[f"R{i}" for i in range(5)],
+    sc.add_argument("--fail-on", metavar="CLASS", type=str.upper, choices=[f"R{i}" for i in range(5)],
                     help="exit 1 if anything reachable is at or above CLASS (R0-R4); exit 3 if the scan is incomplete")
     sc.add_argument("--write-drafts", metavar="DIR", help="write draft records for unclassified tools, to contribute")
     sc.add_argument("--registry", action="append", help="extra registry path (repeatable)")
@@ -267,7 +286,11 @@ def main(argv: list[str] | None = None) -> int:
     ex.set_defaults(fn=cmd_export)
 
     ns = p.parse_args(argv)
-    return ns.fn(ns)
+    try:
+        return ns.fn(ns)
+    except UsageError as exc:
+        print(exc, file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

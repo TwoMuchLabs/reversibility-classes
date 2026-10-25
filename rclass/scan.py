@@ -87,19 +87,32 @@ def clean(text: Any, limit: int = 120) -> str:
 
 
 TOKEN_SHAPES = re.compile(
-    r"(?:ghp_|gho_|ghu_|ghs_|github_pat_|sk-|sk_live_|sk_test_|rk_live_|xox[abprs]-|AKIA|ASIA|eyJ)[A-Za-z0-9_\-./+=]{6,}"
-    r"|[A-Za-z][A-Za-z0-9+.\-]*://[^/\s:@]+:[^@\s]+@"
-    r"|(?i:(?:password|passwd|pwd|secret|token|api[_-]?key|authorization|bearer)\s*[=:]?\s+)\S+"
-    r"|(?i:(?:password|passwd|pwd|secret|token|api[_-]?key)[=:])\S+"
-    r"|\b[^\s:@/]{1,64}:[^\s@]{3,}@[^\s]+"
+    r"(?:ghp_|gho_|ghu_|ghs_|ghr_|github_pat_|glpat-|sk-|sk_live_|sk_test_|rk_live_|xox[abprs]-|npm_|AIza|AKIA|ASIA|eyJ)"
+    r"[A-Za-z0-9_\-./+=]{6,}"
+    r"|https://hooks\.slack\.com/\S+"
+    r"|[A-Za-z][A-Za-z0-9+.\-]*://[^/\s:@]+:[^@\s]+@"          # user:pass@ in a URL
+    r"|\b[\w.\-]+:[^\s/@]{4,}"                                 # user:pass, key:value pairs
 )
+# Text after one of these words, to the end of the line, is redacted whole.
+SECRET_WORDS = re.compile(r"(?i)\b(password|passwd|pwd|passphrase|secret|token|api[ _-]?key|apikey|authorization|"
+                          r"credential|bearer|private[ _-]key|access[ _-]key|key)\b[^\n]*")
 
 
 def redact(text: str, secrets: Iterable[str]) -> str:
-    out = CONTROL_RE.sub(" ", text)
+    """Best-effort redaction of server text: the config's own values, anything after a secret-sounding
+    word, common token shapes, and user:password pairs. Over-redaction is the intended failure."""
+    out = re.sub(r"[\x00-\x09\x0b-\x1f\x7f-\x9f]", " ", text)
     for s in sorted({s for s in secrets if s and len(s) >= 4}, key=len, reverse=True):
         out = out.replace(s, "[redacted]")
+    out = SECRET_WORDS.sub(lambda m: m.group(1) + " [redacted]", out)
     return TOKEN_SHAPES.sub("[redacted]", out)
+
+
+def _last_lines(text: str, n: int = 3) -> str:
+    """The last few meaningful lines (the final error, not the middle of a stack trace)."""
+    noise = re.compile(r"^(Node\.js v\d|warning: |npm (WARN|notice)|\s*at |\s*\^+\s*$)", re.IGNORECASE)
+    lines = [l.strip() for l in text.splitlines() if l.strip() and not noise.match(l.strip())]
+    return " | ".join(lines[-n:])
 
 
 # --------------------------------------------------------------------------- config
@@ -134,12 +147,18 @@ class ServerConfig:
         return [v for v in vals if v]
 
 
-def _project_root_of(path: Path) -> Path | None:
+def _project_root_of(path: Path, home: Path | None = None) -> Path | None:
+    """The repository a config belongs to, or None for a user's own (global) config."""
     if path.name in PROJECT_CONFIG_NAMES:
-        return path.parent
-    if path.parent.name in PROJECT_CONFIG_DIRS:
-        return path.parent.parent
-    return None
+        root = path.parent
+    elif path.parent.name in PROJECT_CONFIG_DIRS:
+        root = path.parent.parent
+    else:
+        return None
+    home = (home or Path.home()).resolve()
+    if root.resolve() == home:
+        return None  # ~/.cursor/mcp.json, ~/.mcp.json: the user's own global config
+    return root
 
 
 def known_config_paths(home: Path | None = None, cwd: Path | None = None) -> list[Path]:
@@ -226,7 +245,7 @@ def load_config(path: Path, cwd: Path | None = None, home: Path | None = None,
     if not isinstance(doc, Mapping):
         raise ValueError(f"could not read {path}: not a JSON object")
 
-    root = _project_root_of(path)
+    root = _project_root_of(path, home)
     approvals = _claude_code_approvals(home, root) if (root and path.name == ".mcp.json") else {}
     disabled = set(approvals.get("disabledMcpjsonServers") or [])
     enabled = set(approvals.get("enabledMcpjsonServers") or [])
@@ -351,33 +370,72 @@ def _custom_source(spec: str) -> bool:
     return "/" in s and not s.startswith("@")  # an npm "user/repo" GitHub shorthand
 
 
-def run_target(command: str | None, args: list[str]) -> tuple[str | None, str | None]:
-    """What a launcher runs: (package or image, note). The note explains a custom source."""
+# Environment variables that change which code a launcher runs, or where it downloads it from.
+_CODE_CHANGING_ENV = re.compile(
+    r"^(PATH|NODE_OPTIONS|NODE_PATH|NODE_EXTRA_CA_CERTS_FILE|PYTHONPATH|PYTHONSTARTUP|PYTHONHOME|PYTHONUSERBASE|"
+    r"LD_PRELOAD|LD_LIBRARY_PATH|LD_AUDIT|DYLD_.*|BASH_ENV|ENV|PERL5OPT|RUBYOPT|JAVA_TOOL_OPTIONS|"
+    r"NPM_CONFIG_.*|YARN_.*|PNPM_.*|BUN_.*|UV_.*|PIP_.*|PIPX_.*|DOCKER_HOST|DOCKER_CONFIG|COREPACK_.*)$",
+    re.IGNORECASE,
+)
+_REGISTRY_FLAGS = {"--registry", "--index", "--index-url", "--extra-index-url", "--default-index", "--find-links", "-f",
+                   "--with", "--with-editable", "--with-requirements", "--userconfig"}
+
+
+def run_target(command: str | None, args: list[str], env: Mapping[str, str] | None = None,
+               project_root: str | None = None) -> tuple[str | None, str | None]:
+    """The package or image a launcher runs *as itself*: (target, note).
+
+    Returns (None, reason) whenever what actually executes might not be that package's own entry
+    point: a command run from inside a package (`npx -p`, `uvx --from X other-cmd`), a docker
+    entrypoint or command override, a custom registry or source, an environment that changes what
+    code runs, or a launcher that is not the system's own.
+    """
     if not command:
         return None, None
-    exe = Path(command).name.lower()
+    path = Path(command)
+    exe = path.name.lower()
     for ext in (".exe", ".cmd", ".bat"):
         exe = exe.removesuffix(ext)
+    bad_env = sorted(k for k in (env or {}) if _CODE_CHANGING_ENV.match(k))
+    if bad_env:
+        return None, f"its config sets {', '.join(bad_env[:3])}, which can change what code runs"
+    if command != path.name:  # a path rather than a launcher found on PATH
+        if not path.is_absolute():
+            return None, "runs a launcher by relative path, which may not be the system's own"
+        if project_root and str(path.resolve()).startswith(str(Path(project_root).resolve()) + os.sep):
+            return None, "runs a launcher from inside the project, which may not be the system's own"
     first = args[:1]
     if exe in ("npx", "bunx", "pnpx") or (exe in ("pnpm", "yarn") and first == ["dlx"]) or \
             (exe == "bun" and first == ["x"]) or (exe == "npm" and first in (["exec"], ["x"])):
         rest = args if exe in ("npx", "bunx", "pnpx") else args[1:]
         target, flags = _first_positional(rest, _NPX_VALUE_FLAGS)
-        pkg = flags.get("-p") or flags.get("--package") or target
-        if pkg and _custom_source(pkg):
+        if "-p" in flags or "--package" in flags or "-c" in flags or "--call" in flags:
+            return None, "runs a command from inside a package (-p/--package/-c), not the package itself"
+        if _REGISTRY_FLAGS & set(flags):
+            return None, "installs from a custom registry"
+        if target and _custom_source(target):
             return None, "installed from a custom source (a path, URL or git repository), so it may be a fork"
-        return pkg, None
+        return target, None
     if exe == "uvx" or (exe == "uv" and args[:2] == ["tool", "run"]) or (exe == "pipx" and first == ["run"]):
         rest = args[2:] if exe == "uv" else (args[1:] if exe == "pipx" else args)
         target, flags = _first_positional(rest, _UVX_VALUE_FLAGS)
+        if _REGISTRY_FLAGS & set(flags):
+            return None, "installs from a custom index or adds extra packages"
         src = flags.get("--from") or flags.get("--spec")
         if src:
             if _custom_source(src):
                 return None, "installed from a custom source (--from/--spec), so it may be a fork"
+            if target is None or _strip_version(target).lower() != _strip_version(src).lower():
+                return None, "runs a different command from the package it installs (--from/--spec)"
             return src, None
         return target, None
     if exe in ("docker", "podman") and first == ["run"]:
-        target, _ = _first_positional(args[1:], _DOCKER_VALUE_FLAGS)
+        rest = args[1:]
+        target, flags = _first_positional(rest, _DOCKER_VALUE_FLAGS)
+        if "--entrypoint" in flags:
+            return None, "overrides the image's entrypoint"
+        if target is not None and rest.index(target) < len(rest) - 1:
+            return None, "passes a command or arguments after the image, which can replace what it runs"
         return target, None
     return None, None
 
@@ -388,7 +446,7 @@ def _package_index(registry: Registry) -> dict[str, str]:
 
 
 def identify_by_package(cfg: ServerConfig, registry: Registry) -> tuple[str | None, str | None]:
-    target, note = run_target(cfg.command, cfg.args)
+    target, note = run_target(cfg.command, cfg.args, cfg.env, cfg.project_root)
     if not target:
         return None, note
     return _package_index(registry).get(_strip_version(target).lower()), note
@@ -733,6 +791,7 @@ class ServerReport:
     server_text: str | None = None
     target: str | None = None
     needs_consent: bool = False
+    started: bool = False
 
     @property
     def counted(self) -> bool:
@@ -800,6 +859,12 @@ def _scan_server(cfg, registry, timeout, start, inherit_env, assume, show_server
     if assumed and assumed not in registry.servers():
         rep.status, rep.message = "error", f"--assume names {clean(assumed, 40)!r}, which is not a registry record"
         return rep
+    if assumed and (cfg.remote or not start):
+        # An assumption about a server that is not started cannot be checked against what it offers,
+        # and a config change could make it describe something else entirely.
+        rep.status = "error"
+        rep.message = "--assume applies only to servers that are started and listed; it is ignored with --list and for hosted servers"
+        return rep
 
     def use_record(sid: str, how: str) -> None:
         rep.record, rep.matched_by = sid, how
@@ -811,10 +876,8 @@ def _scan_server(cfg, registry, timeout, start, inherit_env, assume, show_server
     if cfg.remote:
         sid, exact = identify_by_endpoint(cfg, registry)
         rep.status = "remote"
-        if assumed:
-            sid, exact = assumed, True
         if sid:
-            use_record(sid, "assumed" if assumed else "endpoint")
+            use_record(sid, "endpoint")
             rep.endpoint_exact = exact
             registry_tools(sid)
             rep.message = "hosted: not started; classes are the registry's for this endpoint" + (
@@ -824,7 +887,7 @@ def _scan_server(cfg, registry, timeout, start, inherit_env, assume, show_server
         return rep
 
     sid, note = identify_by_package(cfg, registry)
-    rep.target, _ = run_target(cfg.command, cfg.args)
+    rep.target, _ = run_target(cfg.command, cfg.args, cfg.env, cfg.project_root)
     rep.source_note = note
     if assumed:
         use_record(assumed, "assumed")
@@ -849,12 +912,14 @@ def _scan_server(cfg, registry, timeout, start, inherit_env, assume, show_server
         rep.message = "needs values the client would supply or prompt for: " + ", ".join(sorted({clean(n, 40) for n in cfg.needs}))
         return rep
 
+    rep.started = True
     try:
         listing = list_tools_stdio(cfg, timeout=timeout, inherit_env=inherit_env)
     except McpError as exc:
         rep.status, rep.message = "error", str(exc)
         if show_server_errors and exc.server_text:
-            rep.server_text = redact(exc.server_text.strip()[-600:], cfg.secrets())
+            secrets = cfg.secrets() + ([v for v in os.environ.values() if len(v) >= 8] if inherit_env else [])
+            rep.server_text = redact(_last_lines(exc.server_text), secrets)[:400]
         return rep
 
     rep.server_info = listing.server_info
@@ -955,8 +1020,10 @@ def scan_servers(servers: list[ServerConfig], configs: list[str], registry: Regi
             reports.append(ServerReport(key=s.key, config=s.source, status="duplicate",
                                         message=f"same server as {clean(first[fp], 60)}: counted once"))
             continue
-        first.setdefault(fp, s.key)
-        reports.append(scan_server(s, registry, timeout=timeout, start=start, **kw))
+        r = scan_server(s, registry, timeout=timeout, start=start, **kw)
+        if r.status in ("scanned", "static", "remote", "error"):
+            first.setdefault(fp, s.key)  # a skipped or disabled copy never hides an active one
+        reports.append(r)
     return ScanResult(configs, reports, started=start)
 
 
@@ -1002,7 +1069,7 @@ def render_text(result: ScanResult, details: bool = False, drafts_written: bool 
             out.append(f"{head}{what}{verb}{s.message}")
             if s.server_text:
                 out.append(f"{pad}server said (redacted): {clean(s.server_text, 300)}")
-            elif s.status == "error" and not show_server_errors:
+            elif s.status == "error" and s.started and not show_server_errors:
                 out.append(f"{pad}(add --show-server-errors to see what the server reported, with secrets redacted)")
             out.append("")
             continue
