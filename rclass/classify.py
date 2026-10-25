@@ -7,6 +7,7 @@ from typing import Any, Mapping
 
 from .model import Classification, RClass
 from .registry import Registry, ToolEntry
+from .versions import rules_apply
 
 _MISSING = object()
 
@@ -50,10 +51,18 @@ def _rule_holds(rule: Mapping[str, Any], args: Mapping[str, Any] | None) -> bool
     return _condition_holds(rule, args)
 
 
-def _evaluate(entry: ToolEntry, args: Mapping[str, Any] | None) -> tuple[RClass, str, int | None]:
+def _evaluate(entry: ToolEntry, args: Mapping[str, Any] | None,
+              lowering: bool = True) -> tuple[RClass, str, int | None]:
+    """The first matching `when` rule, else the base class. With `lowering=False`, a rule that would
+    lower the class is skipped (the deployed version is older than the record was checked against)."""
     for i, rule in enumerate(entry.raw.get("when", [])):
         if _rule_holds(rule, args):
-            return RClass.parse(rule["class"]), rule["rationale"], i
+            cls = RClass.parse(rule["class"])
+            if not lowering and cls < entry.base:
+                return entry.base, (f"{entry.raw['rationale']} (Rules that lower this class were checked against "
+                                    f"release {entry.min_version} or later; this server runs an older or unknown "
+                                    f"release.)"), None
+            return cls, rule["rationale"], i
     return entry.base, entry.raw["rationale"], None
 
 
@@ -92,6 +101,8 @@ def classify(
     registry: Registry | None = None,
     annotations: Mapping[str, Any] | None = None,
     trusted_server: bool = False,
+    server_version: str | None = None,
+    version_pinned: bool = False,
 ) -> Classification:
     """Classify one tool call.
 
@@ -103,7 +114,8 @@ def classify(
     entries = reg.entries(server, tool)
 
     if entries:
-        results = [(_evaluate(e, args), e) for e in entries]
+        results = [(_evaluate(e, args, rules_apply(e.min_version, server_version, version_pinned)), e)
+                   for e in entries]
         (rclass, rationale, rule_index), entry = max(results, key=lambda r: r[0][0])
         source = "rule" if rule_index is not None else "registry"
         result = Classification(rclass, source, rationale, server, tool, rule_index)

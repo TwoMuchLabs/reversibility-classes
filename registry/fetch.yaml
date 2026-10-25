@@ -1,6 +1,6 @@
 # Reversibility Classes — Fetch (MCP reference server)
 # Tool names verified against the evidence URLs below. Classes are drafts until reviewed.
-spec_version: '0.2'
+spec_version: '0.3'
 server:
   id: fetch
   name: Fetch (MCP reference server)
@@ -18,4 +18,5 @@ tools:
 - name: fetch
   class: R0
   rationale: Retrieves a URL; its intended effect is reading.
+  egress: true
   review: draft

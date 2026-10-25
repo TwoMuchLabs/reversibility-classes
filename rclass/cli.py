@@ -261,7 +261,7 @@ def _class_arg(v: str | None) -> RClass | None:
 def _gate_policy(ns: argparse.Namespace):
     from .gate import GatePolicy
     try:
-        return GatePolicy(_class_arg(ns.allow_up_to), _class_arg(ns.deny_from))
+        return GatePolicy(_class_arg(ns.allow_up_to), _class_arg(ns.deny_from), getattr(ns, "egress_allow", None) or ())
     except ValueError as exc:
         raise UsageError(str(exc)) from None
 
@@ -269,6 +269,8 @@ def _gate_policy(ns: argparse.Namespace):
 def _gate_args(ns: argparse.Namespace) -> list[str]:
     """The policy flags, repeated in a generated hook command so the hook enforces the same policy."""
     out = []
+    for h in getattr(ns, "egress_allow", None) or []:
+        out += ["--egress-allow", h]
     if ns.allow_up_to:
         out += ["--allow-up-to", ns.allow_up_to]
     if ns.deny_from:
@@ -283,15 +285,21 @@ def cmd_hook(ns: argparse.Namespace) -> int:
     try:
         policy = _gate_policy(ns)
         mapping = _parse_assume(ns.map)
-        reg = _registry(ns.registry, ns.override)
-        bad = [r for r in mapping.values() if r not in reg.servers()]
-        if bad:
-            raise UsageError(f"--map names {', '.join(bad)}, which {'is' if len(bad) == 1 else 'are'} not in the registry")
         log = None if ns.no_log else Path(ns.log).expanduser() if ns.log else state_dir() / "audit.jsonl"
     except Exception as exc:  # noqa: BLE001
         print(f"rclass hook: {exc}", file=sys.stderr)
         return ask_on_error(sys.stdout, f"rclass hook is misconfigured: {exc.__class__.__name__}")
-    return run_hook(sys.stdin, sys.stdout, policy, lambda: reg, mapping, log)
+
+    def registry() -> Registry:
+        # Loaded only for MCP calls: Claude Code's own tools pass through the hook on every call and need no
+        # registry. A problem here surfaces inside run_hook, which asks with the reason.
+        reg = _registry(ns.registry, ns.override)
+        bad = [r for r in mapping.values() if r not in reg.servers()]
+        if bad:
+            raise UsageError(f"--map names {', '.join(bad)}, which {'is' if len(bad) == 1 else 'are'} not in the registry")
+        return reg
+
+    return run_hook(sys.stdin, sys.stdout, policy, registry, mapping, log)
 
 
 def cmd_policy(ns: argparse.Namespace) -> int:
@@ -400,6 +408,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="let calls at or below this class (R0 or R1) run without a prompt; default: the client decides")
     hk.add_argument("--deny-from", metavar="CLASS", type=str.upper, choices=classes[1:],
                     help="block calls at or above this class instead of asking")
+    hk.add_argument("--egress-allow", action="append", metavar="HOST",
+                    help="a host (and its subdomains) that calls may send data to after the session has read data; "
+                    "repeatable")
     hk.add_argument("--map", action="append", metavar="SERVER=RECORD",
                     help="treat a configured server as a registry record (you vouch for it; repeatable)")
     hk.add_argument("--log", metavar="FILE", help="where to append one JSON line per decision (class, rule, session's "
@@ -419,12 +430,25 @@ def main(argv: list[str] | None = None) -> int:
                     help="allow tools at or below this class without approval (R0 or R1)")
     po.add_argument("--deny-from", metavar="CLASS", type=str.upper, choices=classes[1:],
                     help="block tools at or above this class instead of requiring approval")
+    po.add_argument("--egress-allow", action="append", metavar="HOST",
+                    help="with --format claude-hook: hosts the session guard lets calls send data to")
     po.add_argument("--out", help="write to this file instead of stdout")
     po.add_argument("--registry", action="append", help="extra registry path (repeatable)")
     po.add_argument("--override", action="append", help="deployment override record (repeatable)")
     po.set_defaults(fn=cmd_policy)
 
-    ns = p.parse_args(argv)
+    args = sys.argv[1:] if argv is None else argv
+    if args[:1] == ["hook"]:
+        # A mistyped flag must not exit 2: the hook sees every tool, and exit 2 would block all of them.
+        try:
+            ns = p.parse_args(args)
+        except SystemExit as exc:
+            if exc.code in (0, None):
+                raise
+            from .gate import ask_on_error
+            return ask_on_error(sys.stdout, "rclass hook is misconfigured: bad command-line arguments")
+    else:
+        ns = p.parse_args(args)
     try:
         return ns.fn(ns)
     except (UsageError, RecordError) as exc:

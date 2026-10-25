@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import yaml
-from jsonschema import Draft202012Validator
 
 from .model import RClass
 
@@ -24,7 +23,16 @@ def _load_schema() -> dict:
 
 
 SCHEMA = _load_schema()
-_VALIDATOR = Draft202012Validator(SCHEMA)
+_VALIDATOR_CACHE: list = []
+
+
+def _validator():
+    """Built on first use: importing jsonschema costs more than the rest of the hook's start-up, and
+    calls to Claude Code's own tools never validate a record."""
+    if not _VALIDATOR_CACHE:
+        from jsonschema import Draft202012Validator
+        _VALIDATOR_CACHE.append(Draft202012Validator(SCHEMA))
+    return _VALIDATOR_CACHE[0]
 
 
 class RecordError(ValueError):
@@ -35,7 +43,7 @@ def validate_record(record: dict, origin: str = "<record>") -> None:
     """Raise RecordError listing every schema and consistency problem in a record."""
     problems = [
         f"{'/'.join(str(p) for p in err.absolute_path) or '(root)'}: {err.message}"
-        for err in sorted(_VALIDATOR.iter_errors(record), key=lambda e: list(e.absolute_path))
+        for err in sorted(_validator().iter_errors(record), key=lambda e: list(e.absolute_path))
     ]
     if not problems:
         for pkg in record["server"].get("packages", []):
@@ -95,6 +103,7 @@ def read_record_file(path: Path) -> dict:
 class ToolEntry:
     server: str
     raw: dict
+    min_version: str | None = None  # the record's server.min_version (SPEC 5.1)
 
     @property
     def name(self) -> str:
@@ -125,8 +134,9 @@ class Registry:
         server = record["server"]["id"]
         if "default_class" in record:
             self._defaults.setdefault(server, []).append(RClass.parse(record["default_class"]))
+        min_version = record["server"].get("min_version")
         for tool in record["tools"]:
-            self._tools.setdefault((server, tool["name"]), []).append(ToolEntry(server, tool))
+            self._tools.setdefault((server, tool["name"]), []).append(ToolEntry(server, tool, min_version))
 
     def add_override(self, record: dict, reason: str, origin: str = "<override>") -> None:
         """Register a deployment override (SPEC 5.5). `reason` is logged with every decision."""

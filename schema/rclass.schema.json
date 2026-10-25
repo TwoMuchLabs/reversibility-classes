@@ -14,7 +14,7 @@
   "properties": {
     "spec_version": {
       "type": "string",
-      "pattern": "^0\\.[12]$"
+      "pattern": "^0\\.[123]$"
     },
     "server": {
       "type": "object",
@@ -48,6 +48,11 @@
         },
         "version": {
           "type": "string"
+        },
+        "min_version": {
+          "type": "string",
+          "pattern": "^v?\\d+(\\.\\d+){0,2}$",
+          "description": "The earliest release the record's rules were checked against (SPEC 5.1). A deployment pinned to an older release, or to one whose version cannot be read, gets the base class of each tool: rules that lower a class do not apply."
         },
         "status": {
           "enum": [
@@ -126,6 +131,10 @@
         "disclosure": {
           "type": "boolean",
           "description": "True if the tool's effect includes a disclosure (SPEC 4.1 rule 2). An override can lower such a tool only by explicitly setting disclosure: false (SPEC 5.5)."
+        },
+        "egress": {
+          "type": "boolean",
+          "description": "True if the tool sends content the caller chooses to a destination the caller chooses, such as a URL (SPEC 5.2). After a session has read data, such a call is R4 unless its destination is allow-listed (SPEC 9)."
         },
         "when": {
           "type": "array",
