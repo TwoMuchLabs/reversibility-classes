@@ -85,8 +85,8 @@ By default R0–R1 calls get no decision (your own permission rules apply) and R
 **Answer the auditor's question.** `rclass audit report` lists every R3 or R4 decision, and everything that asked or blocked, with what happened next: approved and ran, refused, or blocked. Each log line carries the hash of the one before it, so `rclass audit verify` exits 1 if a line was changed, removed or reordered. That makes tampering on the same machine evident, not impossible: ship the log to storage the agent can't write if it has to hold up.
 
 ```text
-2026-10-25T13:02:11+00:00  R4  db/write_query  ask: approved (deepak) and ran  (session 3f2a9c1e, deepak@mbp)
-2026-10-25T13:04:40+00:00  R4  web/fetch  ask: not run (refused or cancelled)  (session 3f2a9c1e, deepak@mbp)
+2026-10-25T13:02:11+00:00  R4  db/write_query  ask: approved (alex) and ran  (session 3f2a9c1e, alex@laptop)
+2026-10-25T13:04:40+00:00  R4  web/fetch  ask: not run (refused or cancelled)  (session 3f2a9c1e, alex@laptop)
 ```
 
 **For gateways that can't see arguments, export static policy.** These use each tool's worst-case class, so they are never less strict than the hook:
