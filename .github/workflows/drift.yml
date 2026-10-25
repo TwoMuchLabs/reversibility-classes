@@ -1,0 +1,46 @@
+name: Registry drift
+
+# Weekly: start the latest release of each registry server and report tools the registry
+# does not classify yet. Opens (or updates) one issue labelled `drift` when there is work to do.
+
+on:
+  schedule:
+    - cron: "17 22 * * 0"   # Monday 06:17 Singapore time
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: astral-sh/setup-uv@v5
+      - run: pip install -e .
+      - name: Check every target server
+        id: check
+        run: |
+          set +e
+          python scripts/check_drift.py drift-report.md
+          echo "drift=$?" >> "$GITHUB_OUTPUT"
+      - name: Open or update the drift issue
+        if: steps.check.outputs.drift == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create drift --color FBCA04 --description "Registry no longer matches a server's latest release" 2>/dev/null || true
+          existing=$(gh issue list --label drift --state open --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --body-file drift-report.md
+          else
+            gh issue create --title "Registry drift: servers ship tools the registry does not classify" --label drift --body-file drift-report.md
+          fi

@@ -7,12 +7,14 @@
 - [ ] One server (or one dispute) per pull request
 - [ ] `server.source` is the repository people actually install, usually the vendor's official one
 - [ ] `server.version` pins the commit or release I verified against
+- [ ] `server.packages` lists how people install it (no versions), so `rclass scan` recognises it
 - [ ] Every tool the server exposes is listed, with names checked against where the code registers them
 - [ ] Every class has a one-sentence rationale stating the fact that decides it
 - [ ] Overwrites and deletes with no history are R4; anything that delivers content to others has `disclosure: true`
 - [ ] Every R1/R2 tool names its undo in `compensation`, and I checked that the undo exists, reverses this action (not another one), and needs no one outside the principal to agree
 - [ ] `when` rules only use argument names the tool really accepts, and only lower a class for narrow, positively matched values
-- [ ] `rclass validate registry` and `pytest -q` pass locally
+- [ ] `rclass scan <config> --details` against the real server shows every tool recognised
+- [ ] `rclass validate --strict registry` and `pytest -q` pass locally
 
 ## AI assistance
 

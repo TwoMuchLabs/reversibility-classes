@@ -17,6 +17,10 @@ server:
     argument. Skills (--skills / ?skills=) gate which tools exist; there is no read-only flag, the closest
     is enabling only the inspect and docs skills. AI-powered search tools send the query to the configured
     LLM provider.
+  packages:
+  - '@sentry/mcp-server'
+  endpoints:
+  - https://mcp.sentry.dev/mcp
 tools:
 - name: add_issue_note
   class: R4

@@ -18,6 +18,10 @@ server:
     or a restricted agent API key, and Stripe requires human confirmation via a URL before some stripe_api_write
     actions such as refunds and outbound payments. The legacy per-resource tools in manifest.json are
     not served and are not listed.
+  packages:
+  - '@stripe/mcp'
+  endpoints:
+  - https://mcp.stripe.com
 tools:
 - name: stripe_api_search
   class: R0

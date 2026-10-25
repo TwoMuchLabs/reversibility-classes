@@ -12,6 +12,8 @@ server:
   status: active
   notes: An outbound GET can carry data in its URL to the remote host. That is an aggregation concern
     (SPEC section 9), not a property of this tool alone.
+  packages:
+  - 'mcp-server-fetch'
 tools:
 - name: fetch
   class: R0

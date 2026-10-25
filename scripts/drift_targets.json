@@ -1,0 +1,15 @@
+{
+  "$comment": "How to start the latest release of each registry server for the weekly drift check. Only servers that list their tools without real credentials are here; dummy values are placeholders, never secrets. {work} is a scratch directory.",
+  "servers": {
+    "filesystem": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem@latest", "{work}"]},
+    "git": {"command": "uvx", "args": ["mcp-server-git@latest", "--repository", "{work}"]},
+    "fetch": {"command": "uvx", "args": ["mcp-server-fetch@latest"]},
+    "memory": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-memory@latest"], "env": {"MEMORY_FILE_PATH": "{work}/memory.json"}},
+    "time": {"command": "uvx", "args": ["mcp-server-time@latest"]},
+    "sequentialthinking": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-sequential-thinking@latest"]},
+    "notion": {"command": "npx", "args": ["-y", "@notionhq/notion-mcp-server@latest"]},
+    "brave-search": {"command": "npx", "args": ["-y", "@brave/brave-search-mcp-server@latest"], "env": {"BRAVE_API_KEY": "placeholder"}},
+    "playwright": {"command": "npx", "args": ["-y", "@playwright/mcp@latest", "--caps", "config,devtools,network,pdf,storage,testing,vision"]},
+    "sentry": {"command": "npx", "args": ["-y", "@sentry/mcp-server@latest"], "env": {"SENTRY_ACCESS_TOKEN": "placeholder"}}
+  }
+}

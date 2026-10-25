@@ -12,6 +12,8 @@ server:
   version: modelcontextprotocol/servers-archived@9be4674d
   status: archived
   notes: Archived. The server runs every query inside a READ ONLY transaction and always rolls it back.
+  packages:
+  - '@modelcontextprotocol/server-postgres'
 tools:
 - name: query
   class: R4

@@ -55,3 +55,4 @@ Open questions from this audit:
 27. **Secret scanning.** GitHub scans secret gists and alerts the matching secret's provider. Is that a disclosure that rules out R1 for secret gists?
 28. **Size limits on compensation.** `stripe/convert_currency` converts back within daily limits, at a fee both ways. Should conversions above the cap be R3?
 29. **Default alert rules.** `sentry/create_project` also creates a client key and, by default, an alert rule. Is R1 honest?
+30. **Reads that carry data out.** `fetch` is R0, but a GET with private data in its query string discloses that data to the remote host. SPEC section 9 treats this as an aggregation concern, not a property of `fetch`. Should a URL that contains data the session has read raise the class of that one call?

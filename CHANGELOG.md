@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.3.0 — 2026-10-25
+
+**Check your own agent.**
+
+- **`rclass scan`** reads an MCP client configuration (Claude Desktop, Claude Code, Cursor, VS Code, Windsurf), starts each local server, lists its tools and reports them by class, counting each tool at the worst class its arguments can reach. It went through two rounds of independent review, by a tester acting as a first-time user and as an attacker. Every finding from both rounds is fixed and has a regression test (two known limits are documented in the README: version drift is invisible to `--list`, and a process that detaches into its own session can outlive a scan):
+  - Unknown tools and servers count as R4. A server is recognised only when its config runs a registry package or image as itself, or points at its hosted URL; `npx -p`, `uvx --from` with another command, docker entrypoint overrides, custom registries, project-local launchers and code-changing environment variables (`PATH`, `NODE_OPTIONS`, …) make it unrecognised. Tool names alone never match; `--assume` maps a started server explicitly.
+  - Servers get the minimal environment the official MCP SDKs pass by default, not your whole shell (`--inherit-env` to change that). A repository's own config (`.mcp.json`, `.vscode/`, `.cursor/`) is not started without consent, and Claude Code's per-project approvals are honoured.
+  - Arguments, environment values and server output are not printed; `--show-server-errors` shows server output redacted.
+  - Hostile or broken servers cannot crash, hang or flood the scan: replies are shape-checked, lines, stderr, pages and tools are capped, and each server runs under a hard deadline in its own process group.
+  - `--list` starts nothing and uses the registry's classes, for CI. `--fail-on CLASS` is a gate with documented exit codes (0 ok, 1 threshold, 2 usage, 3 incomplete). `--json` carries a report version and timestamp. `--write-drafts DIR` writes a starting record that never overwrites an existing file, and `rclass validate --strict` rejects unfinished drafts.
+- **Records say how a server is installed**: optional `server.packages` (npm or PyPI names, container images) and `server.endpoints` (hosted URLs) in SPEC 5.1 and the schema. All 20 records now carry them.
+- **Conformance vectors** ([docs/conformance.md](docs/conformance.md)): 46 classification cases and 9 invalid records, language-neutral, each tied to a SPEC section, with expected results written from the spec text. They caught three planted bugs when checked.
+- `rclass export` writes the registry as one JSON document; `--override` applies a deployment override to `lookup` and `scan`, with its reason taken from `server.notes`.
+- **Weekly drift check** (`.github/workflows/drift.yml`, `scripts/check_drift.py`): starts the latest release of the 10 registry servers that list their tools without real credentials, and opens a `drift` issue when one ships tools the registry does not classify. First run: Filesystem, Git, Fetch, Memory, Time, Sequential Thinking, Notion, Brave Search and Playwright (with every capability enabled) match their records exactly; Sentry exposes most of its tools through `execute_sentry_tool`, so they cannot be listed directly.
+
+**Install:** `pip install git+https://github.com/TwoMuchLabs/reversibility-classes@v0.3.0`, then `rclass scan`.
+
 ## v0.2.0 — 2026-10-25
 
 **What "restorable" means, made precise, and a way to make actions restorable.**
@@ -19,11 +36,10 @@
 - `preimage` in the schema, with validation; `Classification.preimage`, `fallback` and `unconfirmed()`; `Session.confirm_preimage()`; `Session.record()` refuses a pre-image action without `preimage_ref`. The gateway example shows the capture step.
 - New lint: every R1/R2 entry must name its undo; the open registry may not contain `preimage`.
 
+**Repository**
+- Moved to [TwoMuchLabs/reversibility-classes](https://github.com/TwoMuchLabs/reversibility-classes). Old `waghmaredb/reversibility-classes` URLs, including `pip install git+...` links, redirect automatically.
+
 **Install:** `pip install git+https://github.com/TwoMuchLabs/reversibility-classes@v0.2.0`
-
-## Unreleased (before v0.2.0)
-
-- Repository moved to [TwoMuchLabs/reversibility-classes](https://github.com/TwoMuchLabs/reversibility-classes). Old `waghmaredb/reversibility-classes` URLs, including `pip install git+...` links, redirect automatically.
 
 ## v0.1.0 — 2026-10-23
 

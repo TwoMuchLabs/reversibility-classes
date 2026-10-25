@@ -12,6 +12,8 @@ server:
   notes: Archived (assumed from the servers-archived repository; not confirmed via the GitHub API). Every
     tool is a read lookup against Google Maps APIs; the only effect is API quota or billing on the principal's
     key.
+  packages:
+  - '@modelcontextprotocol/server-google-maps'
 tools:
 - name: maps_geocode
   class: R0

@@ -18,6 +18,8 @@ server:
     recordings are treated as the agent's working context. Several tools the README marks read-only still
     write files to the server's output directory (screenshot, PDF, storage state, video, trace, and any
     tool given a filename); those are R1.
+  packages:
+  - '@playwright/mcp'
 tools:
 - name: browser_click
   class: R4

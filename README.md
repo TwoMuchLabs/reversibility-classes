@@ -14,6 +14,57 @@ Agent permission systems ask *which tools* an agent may use, or *how confident* 
 
 Charging a customer $40,000 by mistake is expensive but compensable: refund the charge and the customer is made whole, at a known cost. **R2**. A one-line message to the wrong Slack channel is cheap but permanent: **R4**. Severity scores get these backwards; reversibility doesn't.
 
+## Check your own agent
+
+```bash
+pipx install "git+https://github.com/TwoMuchLabs/reversibility-classes"
+rclass scan
+```
+
+`rclass scan` finds your MCP client configuration (Claude Desktop, Claude Code, Cursor, VS Code or Windsurf), starts each local server, asks it for its tools, and tells you what an agent connected to it could do:
+
+```text
+files     Filesystem (MCP reference server) · 14 tools
+          R0 10  R1 2  R2 0  R3 0  R4 2
+          irreversible (R4): edit_file, write_file
+
+repo      Git (MCP reference server) · 12 tools
+          R0 7  R1 2  R2 0  R3 2  R4 1
+          irreversible (R4): git_checkout
+          approval each time (R3): git_add, git_reset
+
+notes     Memory / knowledge graph (MCP reference server) · 9 tools
+          R0 3  R1 3  R2 0  R3 0  R4 3
+          irreversible (R4): delete_entities, delete_observations, delete_relations
+
+35 tools across 3 servers. 6 irreversible (R4).
+Under the default policy an agent may act alone on 27 (R0–R1); the other 8 need a human.
+Each tool is counted at the worst class its arguments can reach.
+Registry classes are drafts: checked against source by their author, not yet reviewed by a second person.
+```
+
+What it promises:
+
+- **Worst case, not best case.** A tool is counted at the highest class any of its arguments can reach. Unknown tools and servers count as R4, and a server's own annotations are shown as a hint, never trusted.
+- **No guessing who a server is.** A server is matched to a registry record only when its config runs that package or image as itself, or points at its hosted URL. Anything that could make something else run counts as unrecognised: `npx -p` or `uvx --from` running a different command, a docker entrypoint or command override, a custom registry or source, a launcher from a relative or project path, or an `env` that sets `PATH`, `NODE_OPTIONS`, `PYTHONPATH` and the like. Tool names alone never count, because a server chooses its own; if they look familiar, it suggests `--assume`, which only applies to a server it starts and lists.
+- **Minimal environment.** Each server gets only what the official MCP SDKs pass by default (`PATH`, `HOME`, `USER`, …), proxy and certificate settings, and its own `env` from the config. Your cloud keys and tokens stay out. `--inherit-env` passes everything.
+- **Repository configs need consent.** A `.mcp.json`, `.vscode/mcp.json` or `.cursor/mcp.json` belongs to whoever wrote the repository. `rclass scan` asks before starting its servers (or needs `--yes`), and honours what you already approved or disabled in Claude Code.
+- **No secrets in the output.** Arguments, environment values and what a failing server writes are not printed. `--show-server-errors` shows server output with your config's values and common token shapes redacted (best effort).
+- **Built for hostile servers.** Replies are shape-checked, lines and tool lists are capped, and each server runs under a hard deadline in its own process group, which is killed afterwards. (A child that detaches into a new session of its own can outlive it; run scans of untrusted configs in a container.)
+- **Drift is flagged.** If your server offers tools the record doesn't list, they count as R4 and are named; `--write-drafts DIR` turns them into a starting record to [contribute](CONTRIBUTING.md).
+
+Starting a server runs the command your config names, exactly as your client would, so only start configs you trust.
+
+**In CI, scan without starting anything.** `--list` reads the config and reports the registry's classes for every server it recognises, so a pull request can't run code on your CI machine:
+
+```bash
+rclass scan .mcp.json --list --fail-on R4
+```
+
+Exit codes: `0` ok · `1` something reachable is at or above the threshold (an unidentified server counts as R4) · `2` usage error · `3` the scan was incomplete (a server couldn't be scanned, or its config entry is invalid), so the gate can't pass.
+
+`--list` can't see version drift: it applies the record's classes to whatever version the config pins. Run a full scan somewhere you trust (a developer machine, or a scheduled job) to catch tools a newer release added.
+
 ## Why this exists
 
 - **MCP's tool hints are too coarse.** `readOnlyHint` and `destructiveHint` can't say *"compensable"* or *"this is a disclosure"*, and the MCP spec tells clients to treat them as untrusted anyway. This spec maps them conservatively (section 7) and lets an independent registry say more.
@@ -67,10 +118,10 @@ A few classifications worth arguing about:
 
 The registry has had one independent audit; the fixes are applied, and the [open questions](docs/open-classification-questions.md) it raised are waiting for opinions. Disagree with a class? [Open a classification dispute](../../issues/new?template=classification-dispute.yml). That is the point.
 
-## Use it
+## Use it in your own code
 
 ```bash
-pip install git+https://github.com/TwoMuchLabs/reversibility-classes@v0.2.0
+pip install "git+https://github.com/TwoMuchLabs/reversibility-classes"
 rclass lookup sqlite write_query --args '{"query": "DROP TABLE users"}'
 # R4  Irreversible  (registry)
 #   Accepts any non-SELECT statement: UPDATE, DELETE and DROP destroy prior values, and even INSERT can be an upsert (INSERT OR REPLACE, ON CONFLICT DO UPDATE) that overwrites rows.
@@ -91,6 +142,13 @@ session.record(c, decision)
 **Make actions restorable.** If your gateway saves a file's current content before letting the agent overwrite it, `write_file` is restorable in your deployment: declare a `preimage` override and it becomes R1, with the capture checked before every call and its reference logged ([SPEC 5.6](SPEC.md#56-pre-image-capture)). A record of what changed is not enough on its own; you also need a way to write the old state back, before anyone else has seen the change.
 
 Your environment can be safer than the defaults. If you keep point-in-time database backups, publish a **deployment override** that lowers `DROP TABLE` from R4 to R3 (restoring needs a DBA, so not R1), with the reason logged on every decision. A nightly snapshot is not enough on its own: it loses whatever changed since. Overrides can never lower a disclosure.
+
+## Implement it in another language
+
+Most MCP gateways aren't written in Python. Two things make a port straightforward:
+
+- **[Conformance vectors](docs/conformance.md):** 46 classification cases and 9 invalid records in one JSON file, each tied to a section of the spec. Pass them and your implementation agrees with the spec, not just with this repository.
+- **`rclass export`** writes the whole registry as one JSON document, so another implementation can consume it without parsing YAML.
 
 ## Status and roadmap
 

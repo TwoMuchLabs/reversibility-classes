@@ -12,6 +12,8 @@ server:
   status: active
   notes: Stores the graph in a local file (MEMORY_FILE_PATH) with no history. Deployments that back up
     that file can override the delete tools.
+  packages:
+  - '@modelcontextprotocol/server-memory'
 tools:
 - name: create_entities
   class: R1

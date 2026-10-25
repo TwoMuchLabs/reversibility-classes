@@ -12,6 +12,8 @@ server:
   status: active
   notes: Access is limited to the directories the server is started with. Overwrites keep no backup; deployments
     that run it inside a version-controlled or snapshotted workspace can override write_file to R1.
+  packages:
+  - '@modelcontextprotocol/server-filesystem'
 tools:
 - name: read_text_file
   class: R0

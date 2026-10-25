@@ -19,6 +19,10 @@ server:
     not registered when project_ref is set, and create_edge_function_secret needs URL elicitation and
     the secretCollection option. Some deployments add confirmation prompts for destructive SQL and for
     cost; these do not change the classes.
+  packages:
+  - '@supabase/mcp-server-supabase'
+  endpoints:
+  - https://mcp.supabase.com/mcp
 tools:
 - name: list_organizations
   class: R0

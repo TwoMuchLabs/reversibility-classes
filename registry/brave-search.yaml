@@ -13,6 +13,8 @@ server:
   notes: Every tool is a read query against the Brave Search API; the only effect is API quota or per-query
     billing on the principal's key. Tools can be limited with BRAVE_MCP_ENABLED_TOOLS (allow-list) or
     --disabled-tools.
+  packages:
+  - '@brave/brave-search-mcp-server'
 tools:
 - name: brave_web_search
   class: R0

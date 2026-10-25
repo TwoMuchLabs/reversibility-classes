@@ -15,6 +15,10 @@ server:
     fall under the fail-closed rule. The --read-only flag (GITHUB_READ_ONLY=1) exposes only the read tools,
     and --toolsets/--tools filter the tool list; neither changes a tool's class. Disclosure classes assume
     the target repository may be public.
+  packages:
+  - 'ghcr.io/github/github-mcp-server'
+  endpoints:
+  - https://api.githubcopilot.com/mcp
 tools:
 - name: actions_get
   class: R0

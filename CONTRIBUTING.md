@@ -8,25 +8,35 @@ The registry is only as useful as it is accurate, so contributions are held to t
 2. **Challenge a class.** Open an issue using the *Classification dispute* template. Disagreements are the most valuable contributions: they are how the spec gets sharper.
 3. **Review drafts.** Every machine-proposed entry starts as `review: draft`. Check one against the server's code and change it to `reviewed`.
 4. **Maintainers:** if you maintain a server, a record you have checked can be marked `verified`. Please say so in the pull request.
-5. **Comment on the spec.** Open questions for v0.2 are listed at the end of [`SPEC.md`](SPEC.md).
+5. **Comment on the spec.** Open questions for v0.3 are listed at the end of [`SPEC.md`](SPEC.md).
 
 ## Adding a server
 
-1. Copy an existing file in `registry/` (e.g. `git.yaml`) to `registry/<server-id>.yaml`.
+The fastest start is to let `rclass scan` list the tools for you. Put the server in a config file the way you would run it, then:
+
+```bash
+rclass scan my-server.json --write-drafts drafts/
+```
+
+That writes `drafts/<server>.yaml` with every tool the server offers, each at R4 until you check it. (For a server that is already in the registry but has new tools, it writes `<id>.additions.yaml`: add those tools to the existing record; don't replace it.) A draft is not a contribution: `rclass validate --strict` rejects it until the placeholders are gone.
+
+1. Start from the draft, or copy an existing file in `registry/` (e.g. `git.yaml`) to `registry/<server-id>.yaml`.
 2. Fill in `server.source`, and in `server.evidence` the exact README or source-code URL you read the tool names from. Prefer the source code: READMEs drift. Add the commit or version to `server.version`.
-3. List **every** tool the server exposes, with its exact registered name.
-4. For each tool, pick the class with the tests in [SPEC section 4](SPEC.md#4-the-five-classes):
+3. Say how people install it, in `server.packages`: the npm or PyPI package name, or the container image, **without a version** (`@scope/server`, `mcp-server-x`, `ghcr.io/org/server`). If there is a hosted deployment with the same tools, add its URL to `server.endpoints`. This is how `rclass scan` recognises the server in someone's config; a server with no packages is never recognised.
+4. List **every** tool the server exposes, with its exact registered name.
+5. For each tool, pick the class with the tests in [SPEC section 4](SPEC.md#4-the-five-classes):
    - No effect outside the agent's context → **R0**
    - Fully restorable, nobody outside saw it → **R1**
    - Can't be restored, but a known compensating action exists → **R2**
    - Needs a human or out-of-band recovery, or changes access, credentials, availability or physical state → **R3**
    - Disclosure, unrecoverable destruction, or unrecallable consequence → **R4** (set `disclosure: true` for disclosures)
-5. Use the **highest** class the tool can reach as its base. Add `when` rules only to *lower* the class for narrow, positively matched argument forms (an anchored regex, an exact value, or an absent flag), or to raise it.
-6. Run the checks:
+6. Use the **highest** class the tool can reach as its base. Add `when` rules only to *lower* the class for narrow, positively matched argument forms (an anchored regex, an exact value, or an absent flag), or to raise it.
+7. Check it against the real server, then run the checks:
 
 ```bash
 pip install -e ".[dev]"
-rclass validate registry
+rclass scan my-server.json --details     # every tool recognised, none "not in the registry record"
+rclass validate --strict registry
 pytest -q
 ```
 
