@@ -116,8 +116,7 @@ class Registry:
     records: list[dict] = field(default_factory=list)
     _tools: dict[tuple[str, str], list[ToolEntry]] = field(default_factory=dict)
     _defaults: dict[str, list[RClass]] = field(default_factory=dict)
-    _overrides: dict[tuple[str, str], ToolEntry] = field(default_factory=dict)
-    _override_reasons: dict[tuple[str, str], str] = field(default_factory=dict)
+    _overrides: dict[tuple[str, str], list[tuple[ToolEntry, str]]] = field(default_factory=dict)
 
     # -- loading ---------------------------------------------------------
     def add(self, record: dict, origin: str = "<record>") -> None:
@@ -134,9 +133,9 @@ class Registry:
         validate_record(record, origin)
         server = record["server"]["id"]
         for tool in record["tools"]:
-            key = (server, tool["name"])
-            self._overrides[key] = ToolEntry(server, tool)
-            self._override_reasons[key] = reason
+            # Several overrides for one tool (a platform layer and a team layer, say) are all kept and the
+            # most restrictive applies to each call: a later file never silently replaces an earlier one.
+            self._overrides.setdefault((server, tool["name"]), []).append((ToolEntry(server, tool), reason))
 
     @classmethod
     def from_paths(cls, paths: Iterable[str | Path]) -> "Registry":
@@ -171,11 +170,19 @@ class Registry:
         defaults = self._defaults.get(server)
         return max(defaults) if defaults else None
 
+    def overrides(self, server: str, tool: str) -> list[tuple[ToolEntry, str]]:
+        """Every deployment override for this tool, in the order they were added."""
+        return list(self._overrides.get((server, tool), []))
+
     def override(self, server: str, tool: str) -> tuple[ToolEntry, str] | None:
-        key = (server, tool)
-        if key in self._overrides:
-            return self._overrides[key], self._override_reasons[key]
-        return None
+        """The most restrictive override for this tool, judged by the highest class it can reach."""
+        ovs = self._overrides.get((server, tool))
+        if not ovs:
+            return None
+        def reach(o: tuple[ToolEntry, str]) -> RClass:
+            e = o[0]
+            return max([e.base] + [RClass.parse(r["class"]) for r in e.raw.get("when", [])])
+        return max(ovs, key=reach)  # max keeps the first of equals
 
     def servers(self) -> list[str]:
         return sorted({r["server"]["id"] for r in self.records})

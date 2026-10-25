@@ -14,6 +14,8 @@ Agent permission systems ask *which tools* an agent may use, or *how confident* 
 
 Charging a customer $40,000 by mistake is expensive but compensable: refund the charge and the customer is made whole, at a known cost. **R2**. A one-line message to the wrong Slack channel is cheap but permanent: **R4**. Severity scores get these backwards; reversibility doesn't.
 
+**What it is for.** The specification and the registry are the core: a shared definition of each class, and per-tool classes with the evidence behind them, for whatever enforces your policy. In an organisation that is a central gateway, which can take the registry as JSON (`rclass export`) or as ready-made Cedar or CEL policy (`rclass policy`). For one developer, `rclass scan` shows what an agent could do and `rclass hook` gates Claude Code on their own machine, with [limits](#limits) worth reading first.
+
 ## Check your own agent
 
 ```bash
@@ -78,7 +80,7 @@ rclass: R4 Irreversible (registry). Accepts any non-SELECT statement: UPDATE, DE
 prior values, and even INSERT can be an upsert (…) that overwrites rows. Needs your approval.
 ```
 
-By default R0–R1 calls get no decision (your own permission rules apply) and R2–R4 always ask. `--allow-up-to R1` lets low classes run without a prompt, `--deny-from R4` blocks instead of asking, and `--log audit.jsonl` records the class and rule of every decision (never the arguments). Servers are identified from what your Claude Code config runs, as in `rclass scan --list`; an unrecognised server or tool is R4, and if the hook itself fails it asks rather than allowing. A hook can only make Claude Code stricter: your own deny and ask rules still apply.
+By default R0–R1 calls get no decision (your own permission rules apply) and R2–R4 always ask. `--allow-up-to R1` lets low classes run without a prompt and `--deny-from R4` blocks instead of asking. Every decision is logged to `~/.local/state/rclass/audit.jsonl` with its class, rule and the session's effective class, never the arguments (`--log FILE` to move it, `--no-log` to stop). Servers are identified from what your Claude Code config runs, as in `rclass scan --list`, using Claude Code's project folder rather than wherever the agent has moved to. An unrecognised server or tool is R4, and so is a server whose config changes during a session. `--map NAME=RECORD` vouches for a server in your own user config; a repository's `.mcp.json` cannot use it. Any error inside the hook asks rather than allowing. A hook can only make Claude Code stricter: your own deny and ask rules still apply.
 
 **For gateways that can't see arguments, export static policy.** These use each tool's worst-case class, so they are never less strict than the hook:
 
@@ -94,6 +96,17 @@ rclass policy --format cedar .mcp.json --deny-from R4 > rclass.cedar
 
 Server names in the output are the names in your config; for Docker and agentgateway they must match the names the gateway registered.
 
+### Limits
+
+Read these before relying on the hook as a control.
+
+- **One call at a time.** The hook records the session's effective class but does not yet stop a chain like "read a secret, then fetch a URL that carries it", where each call alone is R0. A session guard for that is in progress.
+- **It runs on the developer's machine.** An agent that can write anywhere on disk can edit the settings that load the hook, or delete its session state. Use it to catch mistakes, not as a boundary against a compromised agent; for that, enforce at a gateway the agent cannot reach.
+- **If Claude Code cannot start the hook at all**, or it times out, Claude Code runs the call under your normal permission rules. The generated settings run a fixed interpreter (`python -m rclass`) with a timeout to make that unlikely. If you need a floor that holds even then, add `--format claude-settings` through managed settings; it asks for every tool whose worst case is R2 or above, so it prompts more than the hook.
+- **Records are checked against one version of each server** (`server.version`) and currently apply to every version. A rule that depended on a server's default was removed for that reason; version ranges are coming.
+- **Your own servers are unrecognised** (R4, so every call asks) until you add records for them with `--registry`, or vouch for one with `--map`.
+- **Only MCP tools.** Shell commands, file edits and web fetches built into the client are left to its own rules.
+
 
 - **MCP's tool hints are too coarse.** `readOnlyHint` and `destructiveHint` can't say *"compensable"* or *"this is a disclosure"*, and the MCP spec tells clients to treat them as untrusted anyway. This spec maps them conservatively (section 7) and lets an independent registry say more.
 - **Class is a fact about the action type, not a model's opinion.** A gateway can enforce it with no model in the decision path.
@@ -101,7 +114,7 @@ Server names in the output are the names in your config; for Docker and agentgat
 - **Unknown means R4.** Unclassified tools fail closed.
 - **Audit-ready.** Logging the class and the rule behind every decision answers "which irreversible actions did this agent take, and who approved them?"
 
-Read the full specification: **[SPEC.md](SPEC.md)** (v0.2, draft for comment).
+Read the full specification: **[SPEC.md](SPEC.md)** (v0.2.2, draft for comment).
 
 Browse the whole registry: **[reversibility.twomuchlabs.com](https://reversibility.twomuchlabs.com)**.
 
@@ -180,7 +193,7 @@ Most MCP gateways aren't written in Python. Two things make a port straightforwa
 
 ## Status and roadmap
 
-The specification is v0.2.1, a draft for comment; `rclass` 0.3 implements it and adds `rclass scan` (the tool and the spec are versioned separately). See the [changelog](CHANGELOG.md). Open questions for v0.3 include a **detection window** (how long a mistake usually goes unnoticed), **pattern rules** for sequences of actions that are harmless alone but not together, and whether a reversibility hint belongs in MCP itself. See [SPEC section 12](SPEC.md#12-open-questions-for-v03).
+The specification is v0.2.2, a draft for comment; `rclass` 0.4 implements it and adds `rclass scan`, the Claude Code hook and policy exports (the tool and the spec are versioned separately). See the [changelog](CHANGELOG.md). Open questions for v0.3 include a **detection window** (how long a mistake usually goes unnoticed), **pattern rules** for sequences of actions that are harmless alone but not together, and whether a reversibility hint belongs in MCP itself. See [SPEC section 12](SPEC.md#12-open-questions-for-v03).
 
 ## License
 

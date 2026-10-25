@@ -14,8 +14,11 @@ An unrecognised server or tool is R4.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import re
+import shlex
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -63,28 +66,110 @@ def claude_code_configs(cwd: Path, home: Path) -> list[Path]:
 
 
 def server_records(configs: Iterable[Path], registry: Registry, cwd: Path, home: Path,
-                   mapping: Mapping[str, str] | None = None) -> dict[str, list[str | None]]:
+                   mapping: Mapping[str, str] | None = None,
+                   fingerprints: dict[str, str] | None = None) -> dict[str, list[str | None]]:
     """Client server name -> the registry record(s) its config entries run (None = unrecognised).
 
     A name can appear in several scopes (user, project, local); every entry is kept and the caller
     takes the strictest, because the hook cannot know which scope the client chose.
+
+    `mapping` (`--map NAME=RECORD`) vouches only for entries in the user's own configuration. An entry a
+    repository defines (`.mcp.json`) keeps its own identification, so a repository cannot borrow a name the
+    user vouched for. `fingerprints`, when given, is filled with a digest of each name's config entries.
     """
+    mapped = {claude_name(k): v for k, v in (mapping or {}).items()}
     out: dict[str, list[str | None]] = {}
+    seen: dict[str, list] = {}
     for p in configs:
         for cfg in sc.load_config(p, cwd=cwd, home=home):
             name = claude_name(cfg.key.split("/")[-1])
             if cfg.disabled:
                 continue
-            if cfg.config_error:
+            seen.setdefault(name, []).append([p.name, cfg.command, cfg.args, cfg.url, sorted(cfg.env.items())])
+            if name in mapped and not cfg.project and not cfg.config_error:
+                sid = mapped[name]
+            elif cfg.config_error:
                 sid = None
             elif cfg.remote:
                 sid, _ = sc.identify_by_endpoint(cfg, registry)
             else:
                 sid, _ = sc.identify_by_package(cfg, registry)
             out.setdefault(name, []).append(sid)
-    for name, sid in (mapping or {}).items():
-        out[claude_name(name)] = [sid]  # an explicit operator mapping replaces identification for that name
+    if fingerprints is not None:
+        for name, entries in seen.items():
+            fingerprints[name] = hashlib.sha256(json.dumps(entries, sort_keys=True).encode()).hexdigest()[:16]
     return out
+
+
+def project_dir(event: Mapping[str, Any]) -> Path:
+    """The project Claude Code is running in. Claude Code sets CLAUDE_PROJECT_DIR for hooks; the event's
+    `cwd` follows the agent's working directory, which a prompt-injected agent can move to a folder holding
+    a decoy `.mcp.json`."""
+    env = os.environ.get("CLAUDE_PROJECT_DIR")
+    return Path(env) if env else Path(event.get("cwd") or Path.cwd())
+
+
+# --------------------------------------------------------------------------- session state
+
+def state_dir() -> Path:
+    base = os.environ.get("RCLASS_STATE_DIR") or os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local/state")
+    return Path(base) / "rclass"
+
+
+class SessionState:
+    """What the hook remembers about one Claude Code session, in `<state dir>/sessions/<id>.json`.
+
+    - **Identity at first sight.** The config entries behind each server name are fingerprinted the
+      first time the session uses that name. If they change later (the agent rewrote `.mcp.json`
+      while the server it started keeps running), the name is treated as unrecognised for the rest
+      of the session.
+    - **Effective class** (SPEC 9): the highest class of any call so far.
+
+    This raises the bar; it is not a boundary against an agent that can write anywhere on disk, which
+    could delete the file. Enforce at a central gateway where that matters.
+    """
+
+    def __init__(self, session_id: str | None, root: Path | None = None):
+        self.path = None
+        self.data: dict[str, Any] = {"identity": {}, "effective": None}
+        if session_id:
+            safe = re.sub(r"[^A-Za-z0-9_.-]", "_", str(session_id))[:128]
+            self.path = (root or state_dir()) / "sessions" / f"{safe}.json"
+            try:
+                loaded = json.loads(self.path.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    self.data.update(loaded)
+            except (OSError, ValueError):
+                pass
+
+    def check_identity(self, records: dict[str, list[str | None]], fingerprints: Mapping[str, str]) -> set[str]:
+        """Names whose config changed since the session first used them; records become unrecognised."""
+        changed = set()
+        ident = self.data.setdefault("identity", {})
+        for name, fp in fingerprints.items():
+            if name not in ident:
+                ident[name] = fp
+            elif ident[name] != fp:
+                changed.add(name)
+                records[name] = [None]
+        return changed
+
+    def raise_to(self, rclass: RClass) -> RClass:
+        prev = self.data.get("effective")
+        eff = max(rclass, RClass.parse(prev)) if prev else rclass
+        self.data["effective"] = str(eff)
+        return eff
+
+    def save(self) -> None:
+        if self.path is None:
+            return
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(self.data), encoding="utf-8")
+            tmp.replace(self.path)
+        except OSError:
+            pass  # state is best effort; classification never depends on being able to write it
 
 
 def claude_name(server: str) -> str:
@@ -111,11 +196,13 @@ def parse_mcp_tool(tool_name: str, known: Iterable[str] = ()) -> tuple[str, str]
 
 
 def classify_call(server_name: str, tool: str, args: Mapping[str, Any] | None,
-                  records: Mapping[str, list[str | None]], registry: Registry) -> Classification:
+                  records: Mapping[str, list[str | None]], registry: Registry,
+                  changed: set[str] = frozenset()) -> Classification:
     """The strictest class across every record this server name could be. Unrecognised means R4."""
     candidates = records.get(server_name)
     if not candidates or any(c is None for c in candidates):
-        why = ("not in any Claude Code config" if not candidates
+        why = ("its config changed during this session" if server_name in changed
+               else "not in any Claude Code config" if not candidates
                else "its config does not run a registry server as itself")
         return Classification(RClass.R4, "fail-closed",
                               f"Server '{server_name}' is unrecognised ({why}); failing closed.", server_name, tool)
@@ -132,9 +219,18 @@ def _reason(c: Classification, server_name: str, decision: str | None) -> str:
     return f"{head}. {c.rationale}{tail}"
 
 
+def ask_on_error(stdout: TextIO, what: str) -> int:
+    """The one thing a gate must not do is fail open: any problem becomes a prompt with the reason."""
+    json.dump({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "ask",
+                                      "permissionDecisionReason": f"rclass could not classify this call ({what}); "
+                                      "asking instead."}}, stdout)
+    stdout.write("\n")
+    return 0
+
+
 def run_hook(stdin: TextIO, stdout: TextIO, policy: GatePolicy, registry_factory,
              mapping: Mapping[str, str] | None = None, log_path: Path | None = None,
-             home: Path | None = None) -> int:
+             home: Path | None = None, state_root: Path | None = None) -> int:
     """Claude Code PreToolUse hook. Always exits 0: a failure asks instead of silently allowing."""
     try:
         event = json.load(stdin)
@@ -143,18 +239,23 @@ def run_hook(stdin: TextIO, stdout: TextIO, policy: GatePolicy, registry_factory
             return 0  # not an MCP tool: no decision, the client's normal rules apply
         args = event.get("tool_input")
         args = args if isinstance(args, Mapping) else None
-        cwd = Path(event.get("cwd") or Path.cwd())
+        cwd = project_dir(event)
         home = home or Path.home()
         registry = registry_factory()
-        records = server_records(claude_code_configs(cwd, home), registry, cwd, home, mapping)
+        fps: dict[str, str] = {}
+        records = server_records(claude_code_configs(cwd, home), registry, cwd, home, mapping, fps)
+        state = SessionState(event.get("session_id"), state_root)
+        changed = state.check_identity(records, fps)
         parsed = parse_mcp_tool(tool_name, records)
         if parsed is None:
             raise ValueError("malformed MCP tool name")
         server_name, tool = parsed
-        c = classify_call(server_name, tool, args, records, registry)
+        c = classify_call(server_name, tool, args, records, registry, changed)
         decision = policy.decide(c.rclass)
+        effective = state.raise_to(c.rclass)
+        state.save()
         if log_path is not None:
-            _log(log_path, event, server_name, tool, c, decision)
+            _log(log_path, event, server_name, tool, c, decision, effective)
         if decision is None:
             return 0
         json.dump({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": decision,
@@ -162,20 +263,24 @@ def run_hook(stdin: TextIO, stdout: TextIO, policy: GatePolicy, registry_factory
         stdout.write("\n")
         return 0
     except Exception as exc:  # noqa: BLE001 - the one thing a gate must not do is fail open
-        json.dump({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "ask",
-                                          "permissionDecisionReason": f"rclass could not classify this call "
-                                          f"({exc.__class__.__name__}); asking instead."}}, stdout)
-        stdout.write("\n")
-        return 0
+        return ask_on_error(stdout, exc.__class__.__name__)
 
 
-def _log(path: Path, event: Mapping[str, Any], server: str, tool: str, c: Classification, decision: str | None) -> None:
-    """One JSON line per decision (SPEC 10: log the class and the rule behind it). Arguments are not logged."""
+def _log(path: Path, event: Mapping[str, Any], server: str, tool: str, c: Classification, decision: str | None,
+         effective: RClass | None = None) -> None:
+    """One JSON line per decision (SPEC 9 and 10: the class, the rule behind it, the session's effective class;
+    an override's reason). Arguments are not logged. Logging is best effort: a full disk never blocks a call."""
     entry = {"time": datetime.now(timezone.utc).isoformat(timespec="seconds"), "session": event.get("session_id"),
              "server": server, "tool": tool, "class": str(c.rclass), "source": c.source, "rule_index": c.rule_index,
-             "decision": decision or "client"}
-    with path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(entry) + "\n")
+             "effective": str(effective) if effective else None, "decision": decision or "client"}
+    if c.source == "override":
+        entry["rationale"] = c.rationale  # carries the override's logged reason (SPEC 5.5)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
+    except OSError:
+        pass
 
 
 # --------------------------------------------------------------------------- static policy exports
@@ -277,10 +382,21 @@ def to_claude_settings(known: Mapping[str, Mapping[str, RClass]], unknown: list[
     return json.dumps({"permissions": {k: v for k, v in perms.items() if v}}, indent=2) + "\n"
 
 
-def claude_hook_settings(extra_args: list[str]) -> str:
-    command = " ".join(["rclass", "hook", "claude-code", *extra_args])
+def claude_hook_settings(extra_args: list[str], python: str | None = None) -> str:
+    """Hook settings that run this exact interpreter (`python -m rclass`), not whatever `rclass` is on PATH:
+    an IDE, terminal or container with a different PATH would otherwise run no hook at all."""
+    # `python -m` puts the current folder first on sys.path, and Claude Code runs hooks in the project
+    # folder, so a repository shipping its own `rclass/` package would run instead. -P (Python 3.11+)
+    # leaves the current folder out; older versions drop it before importing.
+    py = python or sys.executable
+    if sys.version_info >= (3, 11):
+        argv = [py, "-P", "-m", "rclass"]
+    else:
+        argv = [py, "-c", "import sys; del sys.path[0]; from rclass.cli import main; sys.exit(main())"]
+    command = " ".join(shlex.quote(a) for a in [*argv, "hook", "claude-code", *extra_args])
     return json.dumps({"hooks": {"PreToolUse": [{"matcher": "mcp__.*",
-                                                 "hooks": [{"type": "command", "command": command}]}]}}, indent=2) + "\n"
+                                                 "hooks": [{"type": "command", "command": command, "timeout": 30}]}]}},
+                      indent=2) + "\n"
 
 
 def main_hook(argv_policy: GatePolicy, mapping: Mapping[str, str], log: str | None, registry_factory) -> int:

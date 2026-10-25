@@ -449,19 +449,15 @@ tools:
   review: draft
 - name: create_repository
   class: R4
-  rationale: With private set to false, the repository is public and its name and initial content are
-    published to everyone.
+  rationale: Unless private is true, the repository can be public and its name and initial content are
+    published to everyone. Leaving private out is not enough to lower it, because releases differ; v0.10.0
+    sends no default, and GitHub then creates a public repository.
   disclosure: true
   when:
   - arg: private
     equals: true
     class: R1
     rationale: A new private repository can be deleted.
-  - arg: private
-    absent: true
-    class: R1
-    rationale: private defaults to true in the server schema, so the new repository is private and can
-      be deleted.
   compensation: delete_repository
   review: draft
 - name: delete_file

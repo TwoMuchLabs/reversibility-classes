@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.4.2 — 2026-10-25
+
+**Fixes from an enterprise red-team review.** Each reproduced case has a regression test.
+
+- **Registry: `github/create_repository` without `private` is R4 again.** The rule that lowered it to R1 relied on a default the server only sets in recent releases; in v0.10.0 the server sends no default and GitHub creates a public repository. Registry classes still apply to every version of a server; version ranges are planned.
+- **The hook never runs a call ungated because of its own error.** An unreadable registry or a bad `--map` now answers "ask" with the reason, instead of exiting with a code Claude Code treats as "no decision". The generated settings run a fixed interpreter (`python -P -m rclass`, new) with a 30-second timeout, so a missing `rclass` on PATH no longer disables the hook, and `-P` keeps a repository's own `rclass/` folder from running in its place.
+- **Server identity is harder to spoof.** The hook reads configs from Claude Code's project folder (`CLAUDE_PROJECT_DIR`), not from the agent's current directory. It fingerprints each server's config the first time a session uses it; if the config changes mid-session, that server is unrecognised (R4) for the rest of the session. `--map` vouches only for servers in your own user config, never for a repository's `.mcp.json`.
+- **Added records and overrides can no longer lower a class by accident.** Two records with different ids claiming the same package make the server unrecognised (extend a record under its own `server.id` instead). Several overrides for one tool are all kept and the strictest applies to each call; previously the last file loaded silently won.
+- **Decision log on by default**, at `~/.local/state/rclass/audit.jsonl`: class, rule, the session's effective class (SPEC 9) and an override's reason; never arguments. `--no-log` turns it off.
+- **README** leads with the specification and registry as inputs to central enforcement, and lists the hook's [limits](README.md#limits).
+
+**Install:** `pip install git+https://github.com/TwoMuchLabs/reversibility-classes@v0.4.2`
+
 ## v0.4.1 — 2026-10-25
 
 **Ready for review by others.**
