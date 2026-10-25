@@ -2,7 +2,7 @@
 """Fail if any commit in BASE..HEAD lacks a DCO sign-off matching its author.
 
 Usage: python scripts/check_dco.py BASE HEAD
-Merge commits are skipped. The sign-off must name the commit author's email.
+Merge commits and GitHub bot accounts are skipped. The sign-off must name the commit author's email.
 """
 
 from __future__ import annotations
@@ -26,9 +26,16 @@ def commits(base: str, head: str) -> list[tuple[str, str, str]]:
     return rows
 
 
+BOT_EMAIL = re.compile(r"^\d+\+[\w.-]+\[bot\]@users\.noreply\.github\.com$|^[\w.-]+\[bot\]@users\.noreply\.github\.com$", re.I)
+
+
 def missing(rows: list[tuple[str, str, str]]) -> list[tuple[str, str]]:
+    """Commits without a matching sign-off. GitHub's bot accounts (Dependabot and the like) cannot
+    certify the DCO and are exempt; their changes are reviewed by the maintainer who merges them."""
     bad = []
     for sha, email, body in rows:
+        if BOT_EMAIL.match(email):
+            continue
         signers = {e.lower() for e in SIGNOFF.findall(body)}
         if email.lower() not in signers:
             bad.append((sha, email))

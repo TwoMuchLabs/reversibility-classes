@@ -25,3 +25,14 @@ def test_sign_off_by_someone_else_fails():
 def test_sign_off_must_be_a_trailer_line_not_prose():
     rows = [("d" * 40, "ann@example.com", "Mention Signed-off-by: Ann <ann@example.com> inline\n")]
     assert dco.missing(rows) == [("d" * 40, "ann@example.com")]
+
+
+def test_github_bots_are_exempt():
+    rows = [("e" * 40, "49699333+dependabot[bot]@users.noreply.github.com", "Bump x\n")]
+    assert dco.missing(rows) == []
+
+
+def test_a_human_cannot_borrow_the_bot_exemption():
+    rows = [("f" * 40, "dependabot@example.com", "Bump x\n"),
+            ("0" * 40, "me+[bot]@example.com", "x\n")]
+    assert len(dco.missing(rows)) == 2
