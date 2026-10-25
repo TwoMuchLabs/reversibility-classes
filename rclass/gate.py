@@ -411,6 +411,11 @@ def run_hook(stdin: TextIO, stdout: TextIO, policy: GatePolicy, registry_factory
     try:
         event = json.load(stdin)
         tool_name = str(event.get("tool_name", ""))
+        if event.get("hook_event_name") == "PostToolUse":
+            # Record that a call ran, for the tools the hook makes decisions about; never a decision itself.
+            if log_path is not None and (tool_name.startswith("mcp__") or tool_name in BUILTIN_EGRESS | _WRITERS):
+                _log_outcome(log_path, event)
+            return 0
         args = event.get("tool_input")
         args = args if isinstance(args, Mapping) else None
         if not tool_name.startswith("mcp__"):
@@ -427,6 +432,9 @@ def run_hook(stdin: TextIO, stdout: TextIO, policy: GatePolicy, registry_factory
                 c = Classification(RClass.R4, "session", "Changes the files that hold rclass's session state, "
                                    "decision log or Claude Code settings, which would turn the guard off.",
                                    "claude-code", tool_name)
+                if log_path is not None:
+                    _log(log_path, event, "claude-code", tool_name, c, "ask", state.raise_to(c.rclass))
+                    state.save()
                 _emit(stdout, "ask", _reason(c, "claude-code", "ask"))
                 return 0
             c = session_guard(Classification(RClass.R0, "builtin", "", "claude-code", tool_name),
@@ -473,19 +481,27 @@ def run_hook(stdin: TextIO, stdout: TextIO, policy: GatePolicy, registry_factory
 
 def _log(path: Path, event: Mapping[str, Any], server: str, tool: str, c: Classification, decision: str | None,
          effective: RClass | None = None) -> None:
-    """One JSON line per decision (SPEC 9 and 10: the class, the rule behind it, the session's effective class;
-    an override's reason). Arguments are not logged. Logging is best effort: a full disk never blocks a call."""
-    entry = {"time": datetime.now(timezone.utc).isoformat(timespec="seconds"), "session": event.get("session_id"),
-             "server": server, "tool": tool, "class": str(c.rclass), "source": c.source, "rule_index": c.rule_index,
-             "effective": str(effective) if effective is not None else None, "decision": decision or "client"}
+    """One hash-chained line per decision (SPEC 9 and 10; see rclass/audit.py): the class, the rule behind it,
+    the session's effective class, an override's reason, who and where, and a digest of the arguments, never
+    the arguments themselves."""
+    from . import audit
+    args = event.get("tool_input")
+    entry = {"event": "pre", "time": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+             "session": event.get("session_id"), "tool_use_id": event.get("tool_use_id"), **audit.who(),
+             "permission_mode": event.get("permission_mode"), "server": server, "tool": tool, "class": str(c.rclass), "source": c.source, "rule_index": c.rule_index,
+             "effective": str(effective) if effective is not None else None, "decision": decision or "client",
+             "args_sha256": audit.args_digest(args if isinstance(args, Mapping) else None)}
     if c.source == "override":
         entry["rationale"] = c.rationale  # carries the override's logged reason (SPEC 5.5)
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(entry) + "\n")
-    except OSError:
-        pass
+    audit.append(path, entry)
+
+
+def _log_outcome(path: Path, event: Mapping[str, Any]) -> None:
+    """PostToolUse: the call ran. Joined to its decision by tool_use_id."""
+    from . import audit
+    audit.append(path, {"event": "post", "time": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                        "session": event.get("session_id"), "tool_use_id": event.get("tool_use_id"), **audit.who(),
+                        "tool": str(event.get("tool_name", ""))})
 
 
 # --------------------------------------------------------------------------- static policy exports
@@ -601,9 +617,9 @@ def claude_hook_settings(extra_args: list[str], python: str | None = None) -> st
     command = " ".join(shlex.quote(a) for a in [*argv, "hook", "claude-code", *extra_args])
     # Every tool, not only MCP ones: the session guard must see Read, Bash and the like to know the session
     # has read data. Non-MCP calls get no decision, except WebFetch after a read.
-    return json.dumps({"hooks": {"PreToolUse": [{"matcher": ".*",
-                                                 "hooks": [{"type": "command", "command": command, "timeout": 30}]}]}},
-                      indent=2) + "\n"
+    # PostToolUse records that a call actually ran, so the log shows which prompts were approved.
+    entry = [{"matcher": ".*", "hooks": [{"type": "command", "command": command, "timeout": 30}]}]
+    return json.dumps({"hooks": {"PreToolUse": entry, "PostToolUse": entry}}, indent=2) + "\n"
 
 
 def main_hook(argv_policy: GatePolicy, mapping: Mapping[str, str], log: str | None, registry_factory) -> int:

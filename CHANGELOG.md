@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.6.0 — 2026-10-25
+
+**An audit log an auditor can use.**
+
+- **Who approved what.** The hook now also runs after each MCP call, `WebFetch` and write it decides about (PostToolUse), so the log knows whether a call that asked went on to run. Decision lines add the user, host, Claude Code permission mode and a SHA-256 digest of the arguments; the arguments themselves are never logged.
+- **`rclass audit report`** lists every decision at R3 or above, and everything that asked or blocked, with its outcome: approved and ran, refused or cancelled, or blocked. An approval in a mode other than the default is reported as that mode, not credited to a person. `--min-class` and `--json` are available.
+- **`rclass audit verify`**: each line carries the hash of the one before it and of its own content, so a changed, removed or reordered line is reported (exit 1). This is tamper-evident on the same machine, not tamper-proof.
+- Re-run `rclass policy --format claude-hook` to add the PostToolUse entry to your settings.
+
+**Install:** `pip install git+https://github.com/TwoMuchLabs/reversibility-classes@v0.6.0`
+
 ## v0.5.0 — 2026-10-25
 
 **Specification 0.3.0: sessions and versions.**
