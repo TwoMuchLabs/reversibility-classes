@@ -821,14 +821,31 @@ def _entry_worst(e: ToolEntry) -> RClass:
     return max([e.base] + [RClass.parse(r["class"]) for r in e.raw.get("when", [])])
 
 
-def worst_case(registry: Registry, sid: str | None, tool: str) -> tuple[RClass, str, str, bool, str | None]:
+def _governed_override(registry: Registry, sid: str, tool: str, environment: str | None, governed: bool):
+    """The strictest override that applies here, and whether it may lower a class (SPEC 5.5)."""
+    from datetime import datetime, timezone
+
+    from .classify import override_status
+    today = datetime.now(timezone.utc).date().isoformat()
+    best = None
+    for entry, reason in registry.overrides(sid, tool):
+        applies, may_lower, _ = override_status(entry.meta, environment, today, governed)
+        if applies and (best is None or _entry_worst(entry) > _entry_worst(best[0])):
+            best = (entry, reason, may_lower)
+    return best
+
+
+def worst_case(registry: Registry, sid: str | None, tool: str, environment: str | None = None,
+               governed: bool = False) -> tuple[RClass, str, str, bool, str | None]:
     """(class, source, rationale, lower_for_some_arguments, review) over every argument a call could use.
 
     SPEC 4.1: a tool is classed at the highest level it can reach. Pre-image overrides are not
     applied: a scan cannot know whether a gateway's capture will succeed, so it reports the fallback.
     """
     entries = registry.entries(sid, tool) if sid else []
-    ov = registry.override(sid, tool) if sid else None
+    environment = environment if environment is not None else registry.environment
+    gov = _governed_override(registry, sid, tool, environment, governed or registry.governed) if sid else None
+    ov, may_lower = (gov[:2], gov[2]) if gov else (None, True)
     if ov is not None and "preimage" in ov[0].raw:
         ov = None
     if entries:
@@ -841,11 +858,11 @@ def worst_case(registry: Registry, sid: str | None, tool: str) -> tuple[RClass, 
             ov_entry, reason = ov
             ov_cls = _entry_worst(ov_entry)
             disclosure = any(e.disclosure for e in entries)
-            if ov_cls > cls or (ov_cls < cls and (not disclosure or ov_entry.raw.get("disclosure") is False)):
+            if ov_cls > cls or (ov_cls < cls and may_lower and (not disclosure or ov_entry.raw.get("disclosure") is False)):
                 return ov_cls, "override", f"{ov_entry.raw['rationale']} (override: {reason})", \
                     any(RClass.parse(r["class"]) < ov_cls for r in ov_entry.raw.get("when", [])), review
         return cls, "registry", worst_entry.raw["rationale"], lower, review
-    if ov is not None:
+    if ov is not None and (may_lower or _entry_worst(ov[0]) >= RClass.R4):
         return _entry_worst(ov[0]), "override", f"{ov[0].raw['rationale']} (override: {ov[1]})", False, None
     default = registry.default_for(sid) if sid else None
     if default is not None:

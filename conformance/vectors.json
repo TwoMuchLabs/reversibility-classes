@@ -1,6 +1,6 @@
 {
   "$comment": "Conformance vectors for Reversibility Classes. See docs/conformance.md.",
-  "spec_version": "0.3",
+  "spec_version": "0.4",
   "records": {
     "db": {
       "spec_version": "0.2",
@@ -1515,6 +1515,382 @@
         "arguments": {
           "query": "select 1;"
         }
+      },
+      "expect": {
+        "class": "R3",
+        "source": "override"
+      }
+    },
+    {
+      "id": "override-expired-cannot-lower",
+      "spec": "5.5",
+      "description": "An override past its expires date may not lower a class.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [
+        {
+          "record": {
+            "spec_version": "0.4",
+            "server": {
+              "id": "db",
+              "name": "Example database",
+              "source": "https://example.com/db",
+              "evidence": [
+                "https://example.com/db"
+              ],
+              "version": "v1",
+              "notes": "backups",
+              "expires": "2026-01-31"
+            },
+            "tools": [
+              {
+                "name": "execute_sql",
+                "class": "R3",
+                "rationale": "Override."
+              }
+            ]
+          },
+          "reason": "backups"
+        }
+      ],
+      "call": {
+        "server": "db",
+        "tool": "execute_sql",
+        "arguments": {
+          "query": "drop table t;"
+        },
+        "today": "2026-02-01"
+      },
+      "expect": {
+        "class": "R4",
+        "source": "registry"
+      }
+    },
+    {
+      "id": "override-expiry-day-still-lowers",
+      "spec": "5.5",
+      "description": "On its expires date an override still applies.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [
+        {
+          "record": {
+            "spec_version": "0.4",
+            "server": {
+              "id": "db",
+              "name": "Example database",
+              "source": "https://example.com/db",
+              "evidence": [
+                "https://example.com/db"
+              ],
+              "version": "v1",
+              "notes": "backups",
+              "expires": "2026-01-31"
+            },
+            "tools": [
+              {
+                "name": "execute_sql",
+                "class": "R3",
+                "rationale": "Override."
+              }
+            ]
+          },
+          "reason": "backups"
+        }
+      ],
+      "call": {
+        "server": "db",
+        "tool": "execute_sql",
+        "arguments": {
+          "query": "drop table t;"
+        },
+        "today": "2026-01-31"
+      },
+      "expect": {
+        "class": "R3",
+        "source": "override"
+      }
+    },
+    {
+      "id": "override-expired-can-raise",
+      "spec": "5.5",
+      "description": "An expired override may still raise a class.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [
+        {
+          "record": {
+            "spec_version": "0.4",
+            "server": {
+              "id": "db",
+              "name": "Example database",
+              "source": "https://example.com/db",
+              "evidence": [
+                "https://example.com/db"
+              ],
+              "version": "v1",
+              "notes": "backups",
+              "expires": "2026-01-31"
+            },
+            "tools": [
+              {
+                "name": "execute_sql",
+                "class": "R4",
+                "rationale": "Override."
+              }
+            ]
+          },
+          "reason": "backups"
+        }
+      ],
+      "call": {
+        "server": "db",
+        "tool": "execute_sql",
+        "arguments": {
+          "query": "select 1;"
+        },
+        "today": "2026-02-01"
+      },
+      "expect": {
+        "class": "R4",
+        "source": "override"
+      }
+    },
+    {
+      "id": "override-other-environment",
+      "spec": "5.5",
+      "description": "An override scoped to other environments does not apply.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [
+        {
+          "record": {
+            "spec_version": "0.4",
+            "server": {
+              "id": "db",
+              "name": "Example database",
+              "source": "https://example.com/db",
+              "evidence": [
+                "https://example.com/db"
+              ],
+              "version": "v1",
+              "notes": "backups",
+              "environments": [
+                "dev"
+              ]
+            },
+            "tools": [
+              {
+                "name": "execute_sql",
+                "class": "R3",
+                "rationale": "Override."
+              }
+            ]
+          },
+          "reason": "backups"
+        }
+      ],
+      "call": {
+        "server": "db",
+        "tool": "execute_sql",
+        "arguments": {
+          "query": "drop table t;"
+        },
+        "environment": "prod"
+      },
+      "expect": {
+        "class": "R4",
+        "source": "registry"
+      }
+    },
+    {
+      "id": "override-no-environment-declared",
+      "spec": "5.5",
+      "description": "A deployment that declares no environment gets no environment-scoped overrides.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [
+        {
+          "record": {
+            "spec_version": "0.4",
+            "server": {
+              "id": "db",
+              "name": "Example database",
+              "source": "https://example.com/db",
+              "evidence": [
+                "https://example.com/db"
+              ],
+              "version": "v1",
+              "notes": "backups",
+              "environments": [
+                "dev"
+              ]
+            },
+            "tools": [
+              {
+                "name": "execute_sql",
+                "class": "R3",
+                "rationale": "Override."
+              }
+            ]
+          },
+          "reason": "backups"
+        }
+      ],
+      "call": {
+        "server": "db",
+        "tool": "execute_sql",
+        "arguments": {
+          "query": "drop table t;"
+        }
+      },
+      "expect": {
+        "class": "R4",
+        "source": "registry"
+      }
+    },
+    {
+      "id": "override-matching-environment",
+      "spec": "5.5",
+      "description": "An override applies in an environment it names.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [
+        {
+          "record": {
+            "spec_version": "0.4",
+            "server": {
+              "id": "db",
+              "name": "Example database",
+              "source": "https://example.com/db",
+              "evidence": [
+                "https://example.com/db"
+              ],
+              "version": "v1",
+              "notes": "backups",
+              "environments": [
+                "dev",
+                "staging"
+              ]
+            },
+            "tools": [
+              {
+                "name": "execute_sql",
+                "class": "R3",
+                "rationale": "Override."
+              }
+            ]
+          },
+          "reason": "backups"
+        }
+      ],
+      "call": {
+        "server": "db",
+        "tool": "execute_sql",
+        "arguments": {
+          "query": "drop table t;"
+        },
+        "environment": "staging"
+      },
+      "expect": {
+        "class": "R3",
+        "source": "override"
+      }
+    },
+    {
+      "id": "override-governed-missing-fields",
+      "spec": "5.5",
+      "description": "With governed overrides required, one missing owner, approved_by or expires may not lower a class.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [
+        {
+          "record": {
+            "spec_version": "0.4",
+            "server": {
+              "id": "db",
+              "name": "Example database",
+              "source": "https://example.com/db",
+              "evidence": [
+                "https://example.com/db"
+              ],
+              "version": "v1",
+              "notes": "backups",
+              "owner": "data-platform"
+            },
+            "tools": [
+              {
+                "name": "execute_sql",
+                "class": "R3",
+                "rationale": "Override."
+              }
+            ]
+          },
+          "reason": "backups"
+        }
+      ],
+      "call": {
+        "server": "db",
+        "tool": "execute_sql",
+        "arguments": {
+          "query": "drop table t;"
+        },
+        "governed_overrides": true
+      },
+      "expect": {
+        "class": "R4",
+        "source": "registry"
+      }
+    },
+    {
+      "id": "override-governed-complete",
+      "spec": "5.5",
+      "description": "With governed overrides required, a complete override lowers as usual.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [
+        {
+          "record": {
+            "spec_version": "0.4",
+            "server": {
+              "id": "db",
+              "name": "Example database",
+              "source": "https://example.com/db",
+              "evidence": [
+                "https://example.com/db"
+              ],
+              "version": "v1",
+              "notes": "backups",
+              "owner": "data-platform",
+              "approved_by": "ciso@example.com",
+              "expires": "2099-12-31"
+            },
+            "tools": [
+              {
+                "name": "execute_sql",
+                "class": "R3",
+                "rationale": "Override."
+              }
+            ]
+          },
+          "reason": "backups"
+        }
+      ],
+      "call": {
+        "server": "db",
+        "tool": "execute_sql",
+        "arguments": {
+          "query": "drop table t;"
+        },
+        "governed_overrides": true
       },
       "expect": {
         "class": "R3",

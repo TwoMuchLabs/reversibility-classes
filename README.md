@@ -139,7 +139,7 @@ Read these before relying on the hook as a control.
 - **Unknown means R4.** Unclassified tools fail closed.
 - **Audit-ready.** Logging the class and the rule behind every decision answers "which irreversible actions did this agent take, and who approved them?"
 
-Read the full specification: **[SPEC.md](SPEC.md)** (v0.3.0, draft for comment).
+Read the full specification: **[SPEC.md](SPEC.md)** (v0.4.0, draft for comment).
 
 Browse the whole registry: **[reversibility.twomuchlabs.com](https://reversibility.twomuchlabs.com)**.
 
@@ -209,16 +209,18 @@ session.record(c, decision)
 
 Your environment can be safer than the defaults. If you keep point-in-time database backups, publish a **deployment override** that lowers `DROP TABLE` from R4 to R3 (restoring needs a DBA, so not R1), with the reason logged on every decision. A nightly snapshot is not enough on its own: it loses whatever changed since. Overrides can never lower a disclosure.
 
+An override is a risk decision, so it can say whose it is: `owner`, `approved_by`, `expires` and `environments` in its `server` fields ([SPEC 5.5](SPEC.md#55-deployment-overrides)). After `expires` it can no longer lower a class; with `environments: [dev]` it applies only where you pass `--environment dev`; and with `--governed-overrides`, an override missing any of the three governance fields can only raise a class. When several overrides cover one tool, the strictest wins. Every decision an override affects logs its owner, approver and expiry.
+
 ## Implement it in another language
 
 Most MCP gateways aren't written in Python. Two things make a port straightforward:
 
-- **[Conformance vectors](docs/conformance.md):** 52 classification cases and 9 invalid records in one JSON file, each tied to a section of the spec. Pass them and your implementation agrees with the spec, not just with this repository.
+- **[Conformance vectors](docs/conformance.md):** 60 classification cases and 9 invalid records in one JSON file, each tied to a section of the spec. Pass them and your implementation agrees with the spec, not just with this repository.
 - **`rclass export`** writes the whole registry as one JSON document, so another implementation can consume it without parsing YAML.
 
 ## Status and roadmap
 
-The specification is v0.3.0, a draft for comment; `rclass` 0.5 implements it and adds `rclass scan`, the Claude Code hook and policy exports (the tool and the spec are versioned separately). See the [changelog](CHANGELOG.md). Open questions for v0.3 include a **detection window** (how long a mistake usually goes unnoticed), **pattern rules** for sequences of actions that are harmless alone but not together, and whether a reversibility hint belongs in MCP itself. See [SPEC section 12](SPEC.md#12-open-questions-for-v03).
+The specification is v0.4.0, a draft for comment; `rclass` 0.8 implements it and adds `rclass scan`, the Claude Code hook and policy exports (the tool and the spec are versioned separately). See the [changelog](CHANGELOG.md). Open questions for v0.3 include a **detection window** (how long a mistake usually goes unnoticed), **pattern rules** for sequences of actions that are harmless alone but not together, and whether a reversibility hint belongs in MCP itself. See [SPEC section 12](SPEC.md#12-open-questions-for-v03).
 
 ## License
 

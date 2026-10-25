@@ -1,6 +1,6 @@
 # Reversibility Classes for Agent Actions
 
-**Version:** 0.3.0 (draft)
+**Version:** 0.4.0 (draft)
 **Status:** Request for comments
 **Editor:** Deepak Waghmare
 **License:** This specification is licensed under the [Apache License 2.0](LICENSE), which includes a patent grant to implementers. Versions published before 25 October 2026 were licensed under CC BY 4.0.
@@ -83,7 +83,7 @@ A **classification record** assigns classes to the tools of one tool server. Rec
 
 | Field | Required | Meaning |
 |---|---|---|
-| `spec_version` | yes | The version of this specification the record targets, e.g. `"0.3"`. Records targeting `"0.1"` or `"0.2"` remain valid. |
+| `spec_version` | yes | The version of this specification the record targets, e.g. `"0.3"`. Records targeting `"0.1"`, `"0.2"` or `"0.3"` remain valid. |
 | `server.id` | yes | A stable short identifier, e.g. `filesystem`, `github`. |
 | `server.name` | yes | Human-readable name. |
 | `server.source` | yes | URL of the server's repository or documentation. |
@@ -155,6 +155,20 @@ A deployment **MAY** publish an override record with the same shape, scoped to i
 Some tools are disclosures only because their destination *may* be public: a repository, a wiki page. An override **MAY** lower such a tool only by setting `disclosure: false` on its entry, which asserts that in this deployment the destination is readable by no one outside the principal (for example, "this agent can only reach private repositories"). The assertion and its reason **MUST** be logged with every decision. Without that explicit assertion, an override **MUST NOT** lower a disclosure tool.
 
 When several overrides cover the same tool (for example, one from a platform team and one from a product team), a classifier **MUST** apply the one that gives the call the highest class. An override cannot replace another by being loaded later.
+
+An override is a decision someone made about risk, so it can say who made it and for how long, in its `server` fields:
+
+| Field | Meaning |
+|---|---|
+| `owner` | Who is accountable for the override, e.g. a team. |
+| `approved_by` | Who approved it. |
+| `expires` | The last day it may lower a class, as `YYYY-MM-DD`. |
+| `environments` | The environments it applies in, e.g. `["dev", "staging"]`. |
+
+- An override with `environments` **MUST NOT** apply unless the deployment declares one of those environments. A deployment that declares none gets no environment-scoped overrides.
+- After its `expires` date, an override **MUST NOT** lower a class. It **MAY** still raise one.
+- A deployment **MAY** require governed overrides: an override that lacks `owner`, `approved_by` or `expires` then **MUST NOT** lower a class.
+- A classifier **MUST** log an override's `owner`, `approved_by` and `expires`, when present, with every decision the override affects, alongside its reason.
 
 ### 5.6 Pre-image capture
 
@@ -269,6 +283,7 @@ A record's `spec_version` names `MAJOR.MINOR` (for example `"0.2"`). How changes
 
 ## Appendix A. Change log
 
+- **0.4.0** — Overrides can carry `owner`, `approved_by`, `expires` and `environments` (Section 5.5). An expired override may raise but not lower a class; an environment-scoped override applies only in the environments it names; a deployment may require all three governance fields before an override lowers a class. Records targeting 0.1–0.3 remain valid.
 - **0.3.0** — Adds `server.min_version` (Section 5.1): rules that lower a class apply only to the release a record was checked against or later. Adds the `egress` tool field (Section 5.2) and a session rule treating egress after a read as R4 unless allow-listed (Section 9). When several deployment overrides cover one tool, the most restrictive result applies (Section 5.5). Records targeting 0.1 and 0.2 remain valid.
 - **0.2.2** — Editorial: cites RFC 8174 (only all-capital key words are normative); restates the compensation requirement of Section 5.2 with key words, as already required by the definitions in Section 3; removes outdated "v0.1" references; points to the conformance vectors from Section 11 (informative); adds Section 13, describing how versions are numbered. No conformance requirement changes.
 - **0.2.1** — Adds optional `server.packages` and `server.endpoints` to records (Section 5.1), so tools can recognise a server from how it is installed. Records keep `spec_version: '0.2'`.
