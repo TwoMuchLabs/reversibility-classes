@@ -116,6 +116,18 @@ def server_records(configs: Iterable[Path], registry: Registry, cwd: Path, home:
     return out
 
 
+def config_fingerprints(configs: Iterable[Path], cwd: Path, home: Path) -> dict[str, str]:
+    """The same per-name digests `server_records` computes, without loading the registry."""
+    seen: dict[str, list] = {}
+    for p in configs:
+        for cfg in sc.load_config(p, cwd=cwd, home=home):
+            if cfg.disabled:
+                continue
+            seen.setdefault(claude_name(cfg.key.split("/")[-1]), []).append(
+                [p.name, cfg.command, cfg.args, cfg.url, sorted(cfg.env.items())])
+    return {n: hashlib.sha256(json.dumps(e, sort_keys=True).encode()).hexdigest()[:16] for n, e in seen.items()}
+
+
 def project_dir(event: Mapping[str, Any]) -> Path:
     """The project Claude Code is running in. Claude Code sets CLAUDE_PROJECT_DIR for hooks; the event's
     `cwd` follows the agent's working directory, which a prompt-injected agent can move to a folder holding
@@ -144,18 +156,28 @@ class SessionState:
     could delete the file. Enforce at a central gateway where that matters.
     """
 
-    def __init__(self, session_id: str | None, root: Path | None = None):
+    def __init__(self, session_id: str | None, root: Path | None = None, transcript: str | None = None):
         self.path = None
+        self.degraded = False  # state cannot be kept: the guard then assumes the session has read data
         self.data: dict[str, Any] = {"identity": {}, "effective": None}
         if session_id:
-            safe = re.sub(r"[^A-Za-z0-9_.-]", "_", str(session_id))[:128]
-            self.path = (root or state_dir()) / "sessions" / f"{safe}.json"
+            digest = hashlib.sha256(str(session_id).encode()).hexdigest()[:32]
+            self.path = (root or state_dir()) / "sessions" / f"{digest}.json"
+            try:
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                self.degraded = not os.access(self.path.parent, os.W_OK)
+            except OSError:
+                self.degraded = True
             try:
                 loaded = json.loads(self.path.read_text(encoding="utf-8"))
                 if isinstance(loaded, dict):
                     self.data.update(loaded)
+            except FileNotFoundError:
+                # No state, but the session has already used tools: the file was deleted, so assume a read.
+                if _transcript_has_tool_use(transcript):
+                    self.data["read"] = True
             except (OSError, ValueError):
-                pass
+                self.degraded = True
 
     def check_identity(self, records: dict[str, list[str | None]], fingerprints: Mapping[str, str]) -> set[str]:
         """Names whose config changed since the session first used them; records become unrecognised."""
@@ -171,7 +193,7 @@ class SessionState:
 
     @property
     def has_read(self) -> bool:
-        return bool(self.data.get("read"))
+        return self.degraded or bool(self.data.get("read"))
 
     def mark_read(self) -> None:
         self.data["read"] = True
@@ -183,15 +205,49 @@ class SessionState:
         return eff
 
     def save(self) -> None:
+        """Merge into the file under a lock, so parallel hook runs never undo each other: `read` only ever
+        turns on, the effective class only rises, and the first fingerprint seen for a name stays."""
         if self.path is None:
             return
         try:
+            import fcntl
+        except ImportError:  # Windows: no advisory lock; last writer wins
+            fcntl = None
+        try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            tmp = self.path.with_suffix(".tmp")
-            tmp.write_text(json.dumps(self.data), encoding="utf-8")
-            tmp.replace(self.path)
+            with open(self.path.with_suffix(".lock"), "a+") as lock:
+                if fcntl:
+                    fcntl.flock(lock, fcntl.LOCK_EX)
+                try:
+                    disk = json.loads(self.path.read_text(encoding="utf-8"))
+                    disk = disk if isinstance(disk, dict) else {}
+                except (OSError, ValueError):
+                    disk = {}
+                merged = dict(self.data)
+                merged["read"] = bool(disk.get("read")) or bool(self.data.get("read"))
+                effs = [RClass.parse(x) for x in (disk.get("effective"), self.data.get("effective")) if x]
+                merged["effective"] = str(max(effs)) if effs else None
+                ident = dict(self.data.get("identity") or {})
+                ident.update(disk.get("identity") or {})  # what was seen first wins
+                merged["identity"] = ident
+                merged["snapshot"] = bool(disk.get("snapshot")) or bool(self.data.get("snapshot"))
+                tmp = self.path.with_suffix(f".{os.getpid()}.tmp")
+                tmp.write_text(json.dumps(merged), encoding="utf-8")
+                tmp.replace(self.path)
+                self.data = merged
         except OSError:
-            pass  # state is best effort; classification never depends on being able to write it
+            self.degraded = True
+
+
+def _transcript_has_tool_use(path: str | None) -> bool:
+    """Whether a Claude Code transcript already records a tool call (read only when state is missing)."""
+    if not path:
+        return False
+    try:
+        with open(path, "rb") as f:
+            return any(b'"tool_use"' in line for line in f)
+    except OSError:
+        return False
 
 
 def claude_name(server: str) -> str:
@@ -267,15 +323,47 @@ BUILTIN_EGRESS = {"WebFetch"}
 URL_KEYS = ("url", "uri", "href", "link", "endpoint")
 
 
+_HOST_OK = re.compile(r"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$")
+
+
+def _strings(value: Any, depth: int = 0):
+    if depth > 4:
+        return
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, Mapping):
+        for v in value.values():
+            yield from _strings(v, depth + 1)
+    elif isinstance(value, (list, tuple)):
+        for v in value[:100]:
+            yield from _strings(v, depth + 1)
+
+
+def destinations(args: Mapping[str, Any] | None) -> list[str | None]:
+    """Every destination host an egress call names: the URL-named arguments, and any argument value that
+    looks like a URL. A host that parsers could disagree about (userinfo, backslashes, non-ASCII, an empty
+    host) comes back as None, which is never allow-listed."""
+    values = [v for k in URL_KEYS for v in [(args or {}).get(k)] if isinstance(v, str) and v]
+    values += [s for s in _strings(args) if "://" in s and s not in values]
+    out: list[str | None] = []
+    for v in values:
+        v = v.strip()
+        if "\\" in v or any(ord(ch) < 33 or ord(ch) > 126 for ch in v):
+            out.append(None)
+            continue
+        try:
+            parts = urlsplit(v if "//" in v else "//" + v)
+            host = (parts.hostname or "").rstrip(".")
+        except ValueError:
+            out.append(None)
+            continue
+        out.append(host if host and "@" not in parts.netloc and _HOST_OK.match(host) else None)
+    return out
+
+
 def destination_host(args: Mapping[str, Any] | None) -> str | None:
-    for k in URL_KEYS:
-        v = (args or {}).get(k)
-        if isinstance(v, str) and v:
-            try:
-                return urlsplit(v if "//" in v else "//" + v).hostname
-            except ValueError:
-                return None
-    return None
+    d = destinations(args)
+    return d[0] if d else None
 
 
 def session_guard(c: Classification, egress: bool, args: Mapping[str, Any] | None, state: "SessionState",
@@ -285,13 +373,29 @@ def session_guard(c: Classification, egress: bool, args: Mapping[str, Any] | Non
     if not egress:
         state.mark_read()
         return c
-    host = destination_host(args)
-    if state.has_read and not policy.host_allowed(host) and c.rclass < RClass.R4:
-        where = f" ({host})" if host else ""
+    hosts = destinations(args)
+    allowed = bool(hosts) and all(policy.host_allowed(h) for h in hosts)
+    before = state.has_read
+    state.mark_read()  # what an egress call brings back (a page, a response) is data the session has now read
+    if before and not allowed and c.rclass < RClass.R4:
+        named = sorted({h for h in hosts if h})
+        where = f" ({', '.join(named)})" if named else ""
         return Classification(RClass.R4, "session", "Sends data to a destination the agent chooses" + where +
                               ", after this session has read data, so it could carry that data out (SPEC 9). "
                               "Allow trusted hosts with --egress-allow.", c.server, c.tool)
     return c
+
+
+# Built-in tools that could rewrite the hook's own state or the settings that load it.
+_WRITERS = {"Bash", "Write", "Edit", "MultiEdit", "NotebookEdit"}
+
+
+def touches_guard(tool_name: str, args: Mapping[str, Any] | None) -> bool:
+    if tool_name not in _WRITERS:
+        return False
+    text = " ".join(_strings(args)).lower()
+    marks = [str(state_dir()).lower(), "rclass/sessions", "rclass/audit", ".claude/settings", "managed-settings"]
+    return any(m in text for m in marks)
 
 
 def _emit(stdout: TextIO, decision: str, reason: str) -> None:
@@ -311,7 +415,20 @@ def run_hook(stdin: TextIO, stdout: TextIO, policy: GatePolicy, registry_factory
         args = args if isinstance(args, Mapping) else None
         if not tool_name.startswith("mcp__"):
             # Claude Code's own tools: no class, but they count for the session guard. No registry is loaded.
-            state = SessionState(event.get("session_id"), state_root)
+            state = SessionState(event.get("session_id"), state_root, event.get("transcript_path"))
+            if not state.data.get("snapshot"):
+                # Fingerprint every server at the session's first tool call, before the agent can edit configs.
+                cwd = project_dir(event)
+                home = home or Path.home()
+                state.check_identity({}, config_fingerprints(claude_code_configs(cwd, home), cwd, home))
+                state.data["snapshot"] = True
+            if touches_guard(tool_name, args):
+                state.save()
+                c = Classification(RClass.R4, "session", "Changes the files that hold rclass's session state, "
+                                   "decision log or Claude Code settings, which would turn the guard off.",
+                                   "claude-code", tool_name)
+                _emit(stdout, "ask", _reason(c, "claude-code", "ask"))
+                return 0
             c = session_guard(Classification(RClass.R0, "builtin", "", "claude-code", tool_name),
                               tool_name in BUILTIN_EGRESS, args, state, policy)
             state.save()
@@ -327,8 +444,9 @@ def run_hook(stdin: TextIO, stdout: TextIO, policy: GatePolicy, registry_factory
         registry = registry_factory()
         fps: dict[str, str] = {}
         records = server_records(claude_code_configs(cwd, home), registry, cwd, home, mapping, fps)
-        state = SessionState(event.get("session_id"), state_root)
+        state = SessionState(event.get("session_id"), state_root, event.get("transcript_path"))
         changed = state.check_identity(records, fps)
+        state.data["snapshot"] = True
         parsed = parse_mcp_tool(tool_name, records)
         if parsed is None:
             raise ValueError("malformed MCP tool name")
@@ -359,7 +477,7 @@ def _log(path: Path, event: Mapping[str, Any], server: str, tool: str, c: Classi
     an override's reason). Arguments are not logged. Logging is best effort: a full disk never blocks a call."""
     entry = {"time": datetime.now(timezone.utc).isoformat(timespec="seconds"), "session": event.get("session_id"),
              "server": server, "tool": tool, "class": str(c.rclass), "source": c.source, "rule_index": c.rule_index,
-             "effective": str(effective) if effective else None, "decision": decision or "client"}
+             "effective": str(effective) if effective is not None else None, "decision": decision or "client"}
     if c.source == "override":
         entry["rationale"] = c.rationale  # carries the override's logged reason (SPEC 5.5)
     try:

@@ -100,10 +100,10 @@ Server names in the output are the names in your config; for Docker and agentgat
 
 Read these before relying on the hook as a control.
 
-- **The session guard is coarse.** Once a session has used any tool, a call that sends data to a destination the agent chooses (`fetch`, browser navigation, Claude Code's `WebFetch`) is R4 and asks, because it could carry what the session read. List hosts you trust with `--egress-allow docs.python.org` (subdomains included). It does not see data leaving through a shell command such as `curl`, which Claude Code's own rules govern.
-- **It runs on the developer's machine.** An agent that can write anywhere on disk can edit the settings that load the hook, or delete its session state. Use it to catch mistakes, not as a boundary against a compromised agent; for that, enforce at a gateway the agent cannot reach.
+- **The session guard is coarse.** Once a session has used any tool, a call that sends data to a destination the agent chooses (`fetch`, browser navigation, Claude Code's `WebFetch`) is R4 and asks, because it could carry what the session read. List hosts you trust with `--egress-allow docs.python.org` (subdomains included); a URL that parsers could read differently (userinfo, backslashes, non-ASCII hosts) is never treated as allow-listed, and every URL in a call's arguments must be allowed, not just the one named `url`. An allow-listed host with an open redirect or user-controlled subdomains can still carry data on, so list narrowly. The guard does not see data leaving through a shell command such as `curl`, which Claude Code's own rules govern.
+- **It runs on the developer's machine.** The hook asks before a built-in tool writes to its session state, its log or Claude Code's settings, assumes a read if its state can't be kept or has disappeared mid-session, and runs Python with `-P` so a repository can't substitute its own `rclass` package. An agent determined to get around it on the same machine still can, for example through a shell command that never names those paths. Use it to catch mistakes, not as a boundary against a compromised agent; for that, enforce at a gateway the agent cannot reach.
 - **If Claude Code cannot start the hook at all**, or it times out, Claude Code runs the call under your normal permission rules. The generated settings run a fixed interpreter (`python -m rclass`) with a timeout to make that unlikely. If you need a floor that holds even then, add `--format claude-settings` through managed settings; it asks for every tool whose worst case is R2 or above, so it prompts more than the hook.
-- **Records are checked against one release of each server.** A record can say which release with `server.min_version`; if your config pins an older release, or one whose version can't be read, the rules that lower a class are ignored and you get the stricter base class. Only the GitHub record sets it so far.
+- **Records are checked against one release of each server.** A record can say which release with `server.min_version`; if your config pins an older release, or one whose version can't be read, the rules that lower a class are ignored and you get the stricter base class. Only the GitHub record sets it so far. An unpinned image or package counts as the newest release, so a stale cached image is treated as new.
 - **Your own servers are unrecognised** (R4, so every call asks) until you add records for them with `--registry`, or vouch for one with `--map`.
 - **MCP tools, plus `WebFetch` after a read.** The hook sees every tool so the session guard knows when data has been read, but it only decides MCP calls and `WebFetch`; other built-in tools are left to Claude Code's rules. It adds about 0.1 s to each built-in tool call and about 0.4 s to each MCP call.
 
@@ -114,7 +114,7 @@ Read these before relying on the hook as a control.
 - **Unknown means R4.** Unclassified tools fail closed.
 - **Audit-ready.** Logging the class and the rule behind every decision answers "which irreversible actions did this agent take, and who approved them?"
 
-Read the full specification: **[SPEC.md](SPEC.md)** (v0.2.2, draft for comment).
+Read the full specification: **[SPEC.md](SPEC.md)** (v0.3.0, draft for comment).
 
 Browse the whole registry: **[reversibility.twomuchlabs.com](https://reversibility.twomuchlabs.com)**.
 
@@ -193,7 +193,7 @@ Most MCP gateways aren't written in Python. Two things make a port straightforwa
 
 ## Status and roadmap
 
-The specification is v0.2.2, a draft for comment; `rclass` 0.4 implements it and adds `rclass scan`, the Claude Code hook and policy exports (the tool and the spec are versioned separately). See the [changelog](CHANGELOG.md). Open questions for v0.3 include a **detection window** (how long a mistake usually goes unnoticed), **pattern rules** for sequences of actions that are harmless alone but not together, and whether a reversibility hint belongs in MCP itself. See [SPEC section 12](SPEC.md#12-open-questions-for-v03).
+The specification is v0.3.0, a draft for comment; `rclass` 0.5 implements it and adds `rclass scan`, the Claude Code hook and policy exports (the tool and the spec are versioned separately). See the [changelog](CHANGELOG.md). Open questions for v0.3 include a **detection window** (how long a mistake usually goes unnoticed), **pattern rules** for sequences of actions that are harmless alone but not together, and whether a reversibility hint belongs in MCP itself. See [SPEC section 12](SPEC.md#12-open-questions-for-v03).
 
 ## License
 

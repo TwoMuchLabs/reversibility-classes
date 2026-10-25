@@ -7,6 +7,15 @@
 - **Session guard** (SPEC 9). A tool with the new `egress` field sends data the caller chooses to a destination the caller chooses. Once a session has used any other tool, an egress call is R4 unless its host is allow-listed, so "read a secret, then fetch a URL carrying it" asks before the fetch. `fetch`, Playwright's `browser_navigate` and `browser_tabs`, Puppeteer's `puppeteer_navigate` and Sentry's uptime monitors are marked egress; Claude Code's own `WebFetch` is treated the same way. `rclass hook` now sees every tool (so it knows when data was read) and allows hosts with `--egress-allow`. It loads the registry only for MCP calls, adding about 0.1 s to built-in tool calls.
 - **Version-scoped rules** (SPEC 5.1). The new `server.min_version` names the earliest release a record's rules were checked against. A config pinned to an older release, or to one whose version can't be read (a digest), gets the base class: rules that lower it don't apply. The GitHub record sets `min_version: 2.0.3`, the first release containing the commit it was checked against.
 - **Several overrides** (SPEC 5.5): the one giving the call the highest class applies, whatever order they load in.
+- **Hardened after a second review** that re-ran the first one's attacks and attacked the new code:
+  - The generated hook runs Python with `-P` (or drops the current folder on 3.10), so a repository containing its own `rclass/` package can no longer replace the hook. This hole came in with v0.4.2's `python -m rclass`.
+  - What an egress call brings back counts as a read, so fetching an internal page and then an outside one asks.
+  - Allow-listing only trusts hosts every parser reads the same way (no userinfo, backslashes or non-ASCII), and every URL in a call's arguments must be allowed.
+  - Server configs are fingerprinted at the session's first tool call of any kind, before an agent can rewrite them.
+  - If session state can't be written, or disappears mid-session, the guard assumes the session has read data. A built-in tool writing to the hook's state, log or Claude Code's settings asks first.
+  - Parallel hook runs merge their state under a lock, and session ids map to files by hash.
+  - A mistyped hook flag asks instead of exiting 2, which would block every tool.
+  - Endpoint claims by records with different ids make a hosted server unrecognised, as package claims already did.
 - Six new conformance cases (52 in all) cover versions and overrides. Records using the new fields declare `spec_version: '0.3'`; 0.1 and 0.2 records stay valid.
 
 **Install:** `pip install git+https://github.com/TwoMuchLabs/reversibility-classes@v0.5.0`
