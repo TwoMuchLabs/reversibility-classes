@@ -337,6 +337,32 @@ def cmd_policy(ns: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_audit(ns: argparse.Namespace) -> int:
+    """`verify`: exit 0 if the chain is intact, 1 if not. `report`: the decisions an auditor asks about."""
+    from . import audit
+    from .gate import state_dir
+    path = Path(ns.log).expanduser() if ns.log else state_dir() / "audit.jsonl"
+    if not path.is_file():
+        raise UsageError(f"no decision log at {path}")
+    if ns.action == "verify":
+        n, problems = audit.verify(path)
+        for line, what in problems:
+            print(f"line {line}: {what}")
+        print(f"{n} lines checked: " + ("chain intact" if not problems else f"{len(problems)} problem(s)"))
+        return 1 if problems else 0
+    rows = audit.report(audit.read(path), ns.min_class)
+    if ns.json:
+        print(json.dumps(rows, indent=2))
+        return 0
+    if not rows:
+        print(f"No decisions at {ns.min_class} or above, and nothing asked or blocked.")
+        return 0
+    for r in rows:
+        print(f"{r['time']}  {r['class']}  {r['action']}  {r['decision']}: {r['outcome']}"
+              f"  (session {str(r['session'])[:8]}, {r['user']}@{r['host']})")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="rclass", description="Reversibility Classes for agent actions",
                                 epilog="rclass scan exit codes: 0 ok, 1 threshold reached, 2 usage or config error, "
@@ -419,6 +445,16 @@ def main(argv: list[str] | None = None) -> int:
     hk.add_argument("--registry", action="append", help="extra registry path (repeatable)")
     hk.add_argument("--override", action="append", help="deployment override record (repeatable)")
     hk.set_defaults(fn=cmd_hook)
+
+    au = sub.add_parser("audit", help="check or summarise the hook's decision log",
+                        description="verify: check the log's hash chain (exit 1 if a line was changed, removed or "
+                        "reordered). report: every decision at --min-class or above, or that asked or blocked, "
+                        "with what happened next (approved and ran, refused, blocked).")
+    au.add_argument("action", choices=["verify", "report"])
+    au.add_argument("log", nargs="?", help="decision log (default: ~/.local/state/rclass/audit.jsonl)")
+    au.add_argument("--min-class", type=str.upper, choices=classes, default="R3")
+    au.add_argument("--json", action="store_true")
+    au.set_defaults(fn=cmd_audit)
 
     po = sub.add_parser("policy", help="write enforceable policy for a client or gateway from your MCP config",
                         description="Turns the classes of the servers in an MCP client config into policy: Claude Code "
