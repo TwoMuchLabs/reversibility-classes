@@ -385,7 +385,15 @@ def to_claude_settings(known: Mapping[str, Mapping[str, RClass]], unknown: list[
 def claude_hook_settings(extra_args: list[str], python: str | None = None) -> str:
     """Hook settings that run this exact interpreter (`python -m rclass`), not whatever `rclass` is on PATH:
     an IDE, terminal or container with a different PATH would otherwise run no hook at all."""
-    command = " ".join(shlex.quote(a) for a in [python or sys.executable, "-m", "rclass", "hook", "claude-code", *extra_args])
+    # `python -m` puts the current folder first on sys.path, and Claude Code runs hooks in the project
+    # folder, so a repository shipping its own `rclass/` package would run instead. -P (Python 3.11+)
+    # leaves the current folder out; older versions drop it before importing.
+    py = python or sys.executable
+    if sys.version_info >= (3, 11):
+        argv = [py, "-P", "-m", "rclass"]
+    else:
+        argv = [py, "-c", "import sys; del sys.path[0]; from rclass.cli import main; sys.exit(main())"]
+    command = " ".join(shlex.quote(a) for a in [*argv, "hook", "claude-code", *extra_args])
     return json.dumps({"hooks": {"PreToolUse": [{"matcher": "mcp__.*",
                                                  "hooks": [{"type": "command", "command": command, "timeout": 30}]}]}},
                       indent=2) + "\n"
