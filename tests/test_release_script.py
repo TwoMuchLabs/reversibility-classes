@@ -1,10 +1,11 @@
 import importlib.util
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 spec = importlib.util.spec_from_file_location("release", ROOT / "scripts" / "release.py")
 release = importlib.util.module_from_spec(spec)
-import sys; sys.modules["release"] = release
+sys.modules["release"] = release
 spec.loader.exec_module(release)
 
 

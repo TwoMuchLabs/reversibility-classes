@@ -111,7 +111,7 @@ def redact(text: str, secrets: Iterable[str]) -> str:
 def _last_lines(text: str, n: int = 3) -> str:
     """The last few meaningful lines (the final error, not the middle of a stack trace)."""
     noise = re.compile(r"^(Node\.js v\d|warning: |npm (WARN|notice)|\s*at |\s*\^+\s*$)", re.IGNORECASE)
-    lines = [l.strip() for l in text.splitlines() if l.strip() and not noise.match(l.strip())]
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip() and not noise.match(ln.strip())]
     return " | ".join(lines[-n:])
 
 
@@ -636,7 +636,7 @@ def list_tools_stdio(cfg: ServerConfig, timeout: float = 60.0, inherit_env: bool
                 line = q.get(timeout=0.25)
             except queue.Empty:
                 if timed_out.is_set():
-                    raise timeout_error(method)
+                    raise timeout_error(method) from None
                 continue
             if line is None:
                 if timed_out.is_set():

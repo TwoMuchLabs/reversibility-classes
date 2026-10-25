@@ -1,0 +1,124 @@
+diff --git a/docs/open-questions.md b/docs/open-questions.md
+index 86898e7..56a2f77 100644
+--- a/docs/open-questions.md
++++ b/docs/open-questions.md
+@@ -69,6 +69,9 @@ record before any rename lands:
+   `idempotentHint` / `openWorldHint`.
+ - Open strings vs. closed enums for `destination` / `source` / `sensitivity`.
+ - Does `requiresReview` need a machine-readable *reason* for good client UX?
++- `outcome`: closed enum defined by a recoverability test, or open? Split
++  `consequential` on the wire, or only through `outcomeRef`?
++- `outcomeRef`: reuse `evidenceRef`'s shape, or a lighter pointer?
+ 
+ ## ifc-fides (scheme)
+ 
+diff --git a/specification/draft/action-metadata.mdx b/specification/draft/action-metadata.mdx
+index dd27eee..17d1473 100644
+--- a/specification/draft/action-metadata.mdx
++++ b/specification/draft/action-metadata.mdx
+@@ -86,6 +86,76 @@ Carried under the extension-namespaced key on `ToolAnnotations`:
+ > are **not** re-litigated here. With SEP-2061 now closed, this draft is where
+ > they evolve.
+ 
++### `outcome` values
++
++`outcome` describes the worst real-world state a successful invocation can leave,
++judged by **who can put it back**. The three values are defined by a test rather
++than by adjectives, so that two independent classifiers reach the same value:
++
++| Value | Test | Examples |
++| :--- | :--- | :--- |
++| `benign` | Nothing changes outside the agent's working context. | Read a file, run a `SELECT`, search. |
++| `consequential` | State changes, but the principal can return to the prior state, or to an equivalent one at a known and bounded cost, through interfaces it already holds and without anyone else's consent. | Edit a file whose prior version is committed; save a draft; refund a mistaken charge. |
++| `irreversible` | Recovery needs a party outside the principal or out-of-band effort, or is impossible. | Send a message; publish; overwrite data that has no history; rotate a credential others depend on. |
++
++A tool that delivers content to people or systems outside the principal (a
++*disclosure*) MUST declare `irreversible`, even if the server can later delete the
++content: a recipient who has seen it cannot be made not to have seen it.
++
++`outcome` is a property of the tool, not of one call. A server MUST declare the
++value its most consequential permitted invocation can reach (a SQL tool that
++accepts `DROP TABLE` is `irreversible`, even though most of its calls are
++`benign`). A host MAY treat a specific call as less consequential only through a
++per-call mechanism such as Tool Resolution
++([SEP-1862](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/1862)),
++never by lowering the declared value. A host SHOULD treat a missing `outcome` as
++`irreversible`, consistent with the default of `destructiveHint`.
++
++### Finer classification schemes (`outcomeRef`)
++
++`outcome` is a floor every client can act on. A deployment that needs finer
++distinctions (for example, between an action the principal can restore exactly
++and one it can only compensate, which call for different approval policies) MAY
++carry an `outcomeRef` alongside it:
++
++```jsonc
++"outcome": "consequential",
++"outcomeRef": {
++  "type": "reversibility-classes.v0.2",   // open string naming a scheme
++  "class": "R2",                          // a value in that scheme
++  "ref": "https://github.com/TwoMuchLabs/reversibility-classes/blob/main/registry/stripe.yaml"
++}
++```
++
++- `type` is an open string, coordinated like `evidenceRef.type`, so no single
++  classification model is baked into the wire.
++- A scheme MUST map each of its classes to exactly one `outcome` value. A producer
++  MUST NOT emit an `outcomeRef` whose class maps to a less consequential `outcome`
++  than the one declared.
++- A client that does not implement the scheme ignores `outcomeRef` and acts on
++  `outcome`.
++
++This mirrors how data-labelling schemes refine the `sensitive` boolean in
++[`trust-annotations`](./trust-annotations.mdx): a coarse wire value that cannot
++rot, refined behind an open `type` for hosts that implement the scheme.
++
++**Example scheme: Reversibility Classes.** [Reversibility Classes](https://github.com/TwoMuchLabs/reversibility-classes)
++(Apache-2.0) defines five classes by the same test, and maps them as follows:
++
++| Class | Name | `outcome` |
++| :--- | :--- | :--- |
++| R0 | No effect | `benign` |
++| R1 | Restorable: prior state recorded, principal can write it back, nobody outside saw it | `consequential` |
++| R2 | Compensable: a known fix exists at bounded cost | `consequential` |
++| R3 | Hard to recover: needs a human or out-of-band recovery | `irreversible` |
++| R4 | Irreversible, including every disclosure | `irreversible` |
++
++Its open registry classifies 536 tools across 20 MCP servers, each with a
++one-sentence rationale and a link to the source the tool names were checked
++against, and ships language-neutral conformance vectors. Because a third party
++assigns the classes, they are usable when the server is not trusted, which is the
++accountability model described in [`trust-model.md`](../../docs/trust-model.md).
++
+ ### `requiresReview` lives here, deliberately
+ 
+ `requiresReview` is a **workflow/consent** signal, not a data-classification
+@@ -118,6 +188,11 @@ schemas and divergent action metadata. A public MCP server emitting these
+ fields (candidate: [`github-mcp-server`](https://github.com/github/github-mcp-server))
+ would anchor the draft in a real ecosystem.
+ 
++For `outcome` and `outcomeRef`: the [Reversibility Classes registry](https://github.com/TwoMuchLabs/reversibility-classes/tree/main/registry)
++supplies third-party values for 536 tools, and its `rclass hook claude-code`
++is a host-side consumer that asks for human confirmation per class, evaluated
++per call with the call's arguments.
++
+ ## Open questions
+ 
+ - Coexistence vs. replacement of `destructiveHint` / `readOnlyHint`.
+@@ -125,6 +200,11 @@ would anchor the draft in a real ecosystem.
+   (consistent with `evidenceRef.type`) or closed enums.
+ - Whether `requiresReview` needs a machine-readable *reason* (vs. a bare
+   boolean) to drive good client UX.
++- Whether the `outcome` values stay a closed enum with the test above, and
++  whether `consequential` should be split on the wire (restorable vs.
++  compensable) or only through `outcomeRef`.
++- Whether `outcomeRef` should reuse `evidenceRef`'s shape (`digest` /
++  `canonicalization`) or stay a lighter pointer.
+ 
+ ## Changelog
+ 
+@@ -132,3 +212,4 @@ would anchor the draft in a real ecosystem.
+ | ---------- | ------------------------------------------------------------------- |
+ | 2026-06-10 | Initial draft skeleton, carrying SEP-2061 into the experimental repo; absorbed `requiresReview` from the trust taxonomy. |
+ | 2026-06-15 | SEP-2061 closed in favour of this extension; this draft is now the canonical home for the field semantics. |
++| 2026-10-25 | Proposed: a recoverability test for the `outcome` values, worst-case declaration, and an optional `outcomeRef` for finer schemes. |

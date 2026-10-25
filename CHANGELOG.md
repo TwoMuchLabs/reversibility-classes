@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.4.1 — 2026-10-25
+
+**Ready for review by others.**
+
+- **Governance and community files**: [GOVERNANCE.md](GOVERNANCE.md) (an editor model, how each kind of change is decided, a 7-day comment period for normative specification changes, and the path to multi-organisation governance), [MAINTAINERS.md](MAINTAINERS.md), [SECURITY.md](SECURITY.md) with private reporting, [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) (Contributor Covenant 2.1), [ADOPTERS.md](ADOPTERS.md) and CODEOWNERS.
+- **Specification 0.2.2 (editorial)**: cites RFC 8174, restates the compensation requirement with key words, removes outdated "v0.1" references, points to the conformance vectors, and adds a section on how versions are numbered. No conformance requirement changes.
+- **Proposal to MCP**: [docs/proposals/mcp-action-metadata.md](docs/proposals/mcp-action-metadata.md) and a patch for MCP's draft `action-metadata` extension that defines `outcome` by recoverability and adds an optional `outcomeRef` for finer schemes such as R0–R4. Not yet submitted.
+- **Supply chain**: every workflow action is pinned to a commit; Dependabot, CodeQL and the OpenSSF Scorecard run on the repository; `ruff` runs in CI and CI validates the registry with `--strict`. Releases now attach a wheel, an sdist, `SHA256SUMS` and signed build provenance, and can publish to PyPI through Trusted Publishing once it is enabled.
+
+**Install:** `pip install git+https://github.com/TwoMuchLabs/reversibility-classes@v0.4.1`
+
 ## v0.4.0 — 2026-10-25
 
 **Enforce it.**

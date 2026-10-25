@@ -44,6 +44,10 @@ pytest -q
 
 AI-assisted contributions are welcome. Most of this registry was drafted with AI help and then checked. The rule is the same either way: **you are accountable for every tool name and every class you submit.** Say in the pull request which tools you used and what you checked by hand. The evidence links are how reviewers verify the work, so a tool name with no traceable source, or a class an AI proposed that you didn't check against the code, will be sent back.
 
+## Code of conduct
+
+This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md). How decisions are made is in [GOVERNANCE.md](GOVERNANCE.md); found a security problem? See [SECURITY.md](SECURITY.md) and report it privately.
+
 ## Sign-off (Developer Certificate of Origin)
 
 Every commit in a pull request must be signed off, certifying the [Developer Certificate of Origin](https://developercertificate.org/): that you wrote the change, or otherwise have the right to submit it under the project's licenses. Add the line with `git commit -s`, which appends:

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "rclass"
-version = "0.4.0"
+version = "0.4.1"
 description = "Reversibility Classes (R0-R4) for AI agent tool calls: spec, open registry and reference classifier"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -21,7 +21,7 @@ classifiers = [
 dependencies = ["pyyaml>=6", "jsonschema>=4.18"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "ruff>=0.6"]
 
 [project.scripts]
 rclass = "rclass.cli:main"
@@ -36,3 +36,11 @@ packages = ["rclass"]
 [tool.hatch.build.targets.wheel.force-include]
 "schema/rclass.schema.json" = "rclass/rclass.schema.json"
 "registry" = "rclass/registry"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+# Correctness (pyflakes, syntax/runtime errors) and bugbear; style is not enforced.
+select = ["E4", "E7", "E9", "F", "B"]

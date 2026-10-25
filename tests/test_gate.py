@@ -2,7 +2,6 @@
 
 import io
 import json
-from pathlib import Path
 
 import pytest
 
@@ -181,7 +180,6 @@ def test_claude_hook_settings_carry_the_policy(capsys):
 def test_static_policy_is_never_less_strict_than_the_hook(project):
     """For every tool, the worst-case class the exports use is at least the class of any call."""
     proj, home = project
-    from rclass import scan as sc
     known, _ = gate.static_classes(gate.static_scan([proj / ".mcp.json"], REG, cwd=proj, home=home))
     for query in ("SELECT 1", "DROP TABLE t", "INSERT OR REPLACE INTO t VALUES (1)"):
         for tool in ("read_query", "write_query"):

@@ -136,7 +136,6 @@ def cmd_scan(ns: argparse.Namespace) -> int:
     --fail-on was given, or every server failed."""
     from . import scan as sc
 
-    explicit = bool(ns.configs)
     configs = [Path(p).expanduser() for p in ns.configs] or sc.known_config_paths()
     missing = [str(p) for p in configs if not p.is_file()]
     if missing:

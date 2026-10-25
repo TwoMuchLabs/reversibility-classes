@@ -1,6 +1,6 @@
 # Reversibility Classes for Agent Actions
 
-**Version:** 0.2.1 (draft)
+**Version:** 0.2.2 (draft)
 **Status:** Request for comments
 **Editor:** Deepak Waghmare
 **License:** This specification is licensed under the [Apache License 2.0](LICENSE), which includes a patent grant to implementers. Versions published before 25 October 2026 were licensed under CC BY 4.0.
@@ -17,7 +17,7 @@ The goal is a shared vocabulary that gateways, agent frameworks, auditors and re
 
 ## 2. Conventions
 
-The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT** and **MAY** are to be interpreted as described in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
+The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT** and **MAY** are to be interpreted as described in BCP 14 ([RFC 2119](https://www.rfc-editor.org/rfc/rfc2119), [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174)) when, and only when, they appear in all capitals, as shown here.
 
 Sections marked *(informative)* explain or advise and are not requirements.
 
@@ -34,7 +34,7 @@ Sections marked *(informative)* explain or advise and are not requirements.
 
   A record of an action is not a means of restoring it. An audit log that shows a message was sent documents a disclosure; it does not reverse it. A record shows *what* the prior state was; restoration also needs a way to write it back and an effect nobody else has relied on.
 - **Compensate.** Take a further, known action that leaves the world in a state the principal accepts as equivalent, at a bounded and knowable cost (a refund, a cancellation, a revert commit).
-- **Disclosure.** An effect through which information reaches a party outside the principal's control. A disclosure cannot be restored: deleting a sent message does not un-send its notification. In v0.1, an action is a disclosure when its *purpose* is to deliver content to people (a message, comment, email, issue, review or publication) or to place content where people outside the principal can read it (a public repository, a public page). A state change that only *incidentally* notifies someone (assigning a ticket, changing a status, adding a label) is classified by the recoverability of the state change, not as a disclosure. Distinguishing internal from external audiences is an open question (Section 12).
+- **Disclosure.** An effect through which information reaches a party outside the principal's control. A disclosure cannot be restored: deleting a sent message does not un-send its notification. An action is a disclosure when its *purpose* is to deliver content to people (a message, comment, email, issue, review or publication) or to place content where people outside the principal can read it (a public repository, a public page). A state change that only *incidentally* notifies someone (assigning a ticket, changing a status, adding a label) is classified by the recoverability of the state change, not as a disclosure. Distinguishing internal from external audiences is an open question (Section 12).
 - **Classifier.** Any component (gateway, proxy, framework, library) that assigns a Reversibility Class to an action before it executes.
 
 ## 4. The five classes
@@ -55,7 +55,7 @@ A Reversibility Class describes the **worst plausible recoverable state** after 
 2. **Disclosure is R4.** Any action whose effect includes a disclosure **MUST** be classified R4, even if the stored artifact can later be deleted.
 3. **Class is a property of the action type, declared ahead of time.** A classifier **MUST** be able to assign a class from the tool identity and arguments alone, without asking a model to reason about the call at runtime. Model reasoning **MAY** be used to *raise* a class, never to lower it.
 4. **Arguments can change the class.** Where a tool's effect depends on its arguments (a SQL statement, a recipient, a `force` flag, a target namespace), the record **SHOULD** use conditional rules (Section 5.3).
-5. **Intended effect, not failure mode.** Classes describe the action succeeding as requested. Side effects of a tool *malfunctioning* are out of scope for v0.1.
+5. **Intended effect, not failure mode.** Classes describe the action succeeding as requested. Side effects of a tool *malfunctioning* are out of scope for this version.
 6. **The principal's environment matters, and is declared, not guessed.** A deployment **MAY** lower a class for its own environment (e.g. it has point-in-time database backups, so `DROP TABLE` is R3 rather than R4) by publishing an override (Section 5.5). It **MUST NOT** lower the class of a tool marked as a disclosure.
 
 ### 4.2 Why not severity? *(informative)*
@@ -105,7 +105,7 @@ A **classification record** assigns classes to the tools of one tool server. Rec
 | `rationale` | yes | One sentence: why this class. |
 | `disclosure` | no | `true` if the tool's effect includes a disclosure (Section 4.1, rule 2). Overrides can never lower such a tool. |
 | `when` | no | Ordered list of conditional rules (Section 5.3). |
-| `compensation` | for R1/R2 | The tool(s) or process that restore or compensate, e.g. `create_refund` for a card charge. An R1 or R2 entry (including one reached through a `when` rule) **SHOULD** name it; the open registry requires it. The compensation must reverse *this* action and must not depend on the consent of a party outside the principal. |
+| `compensation` | for R1/R2 | The tool(s) or process that restore or compensate, e.g. `create_refund` for a card charge. An R1 or R2 entry (including one reached through a `when` rule) **SHOULD** name it; the open registry requires it. The compensation **MUST** reverse *this* action and **MUST NOT** depend on the consent of a party outside the principal (this restates the definitions of R1 and R2 in Section 3). |
 | `undo_window` | no | ISO 8601 duration during which restoration or compensation remains possible, e.g. `P180D`. |
 | `review` | no | `draft` (machine-proposed), `reviewed` (checked by one person), or `verified` (checked by two people or by the server's maintainer). Default `draft`. |
 
@@ -127,7 +127,7 @@ A `when` rule lowers or raises a tool's class for specific arguments. Rules are 
 
 *(informative)* Pattern-matching SQL is weak evidence. A `SELECT` can call functions with side effects, a `WITH` clause can hide a `DELETE`, an `INSERT` can be an upsert, and a server that wraps a query in a read-only transaction can be escaped by a query that begins with `COMMIT;` if the driver accepts several statements. A registry **SHOULD** lower SQL only to R0, only for a single statement (no `;` except a trailing one), and only when the server also enforces read-only execution, and say so in the rationale.
 
-Supported matchers in v0.1:
+Supported matchers:
 
 | Matcher | Meaning |
 |---|---|
@@ -213,7 +213,7 @@ Trust **SHOULD** be earned per class. A record of reliable R0 behavior is eviden
 
 Single-action classes are necessary but not sufficient. A sequence of low-class actions can combine into a high-class outcome: reading a private document (R0) and then posting a summary to a public channel (R4) is a disclosure of that document.
 
-In v0.1, a classifier **MUST** at minimum:
+A classifier **MUST** at minimum:
 
 1. Record the class of every action alongside the action in its audit log.
 2. Treat a session's effective class as the highest class of any action it has taken so far.
@@ -228,7 +228,7 @@ Logging the class, the record and rule that produced it, and the policy outcome 
 
 ## 11. Conformance
 
-A classifier conforms to v0.1 if it:
+A classifier conforms to this specification (version 0.2) if it:
 
 1. Assigns a class R0–R4 to every action before execution.
 2. Applies registry records, conditional rules and overrides as specified in Sections 4–5.
@@ -236,6 +236,8 @@ A classifier conforms to v0.1 if it:
 4. Never assigns a class lower than the highest applicable record, except by a logged deployment override that does not concern disclosure.
 5. Meets the aggregation minimum in Section 9.
 6. Honors a `preimage` override only after confirming the capture, falls back otherwise, and logs the pre-image reference (Section 5.6).
+
+*(informative)* The [conformance vectors](docs/conformance.md) ([`conformance/vectors.json`](conformance/vectors.json)) test items 2–4 and 6 with language-neutral cases, each tied to a section of this text. Passing them is the expected way to show that an implementation conforms. Where the vectors and this text disagree, the text governs and the disagreement is a defect in the vectors; please report it. A future minor version may make passing them a requirement.
 
 A classification record conforms if it validates against the schema and every tool entry has a class and a rationale.
 
@@ -245,12 +247,23 @@ A classification record conforms if it validates against the schema and every to
 - **Aggregation rules.** A minimal, enforceable pattern language for sequences.
 - **Audience.** Should disclosure distinguish internal audiences (inside the principal's organization) from external ones?
 - **Signed records.** Letting server maintainers sign their own records.
-- **Upstreaming.** Whether a `reversibilityClass` hint belongs in MCP itself.
+- **Upstreaming.** How these classes map onto MCP's draft `action-metadata` extension, whose `outcome` field has three values (`benign`, `consequential`, `irreversible`). A proposal defining those values by the test in Section 3, with R0 → `benign`, R1–R2 → `consequential` and R3–R4 → `irreversible`, is in [docs/proposals/mcp-action-metadata.md](docs/proposals/mcp-action-metadata.md).
 
 Comments are welcome as GitHub issues.
 
+## 13. Versioning and stability
+
+This specification is versioned `MAJOR.MINOR.PATCH`, separately from the `rclass` tool.
+
+- **PATCH** changes are editorial: wording, examples, links and clarifications that do not change what conforms.
+- **MINOR** changes add or change requirements. While the major version is 0, a minor version **MAY** make changes that are not backward compatible; each one is listed in Appendix A.
+- **MAJOR** version 1 will mark the class definitions and the record format as stable; after it, incompatible changes need a new major version.
+
+A record's `spec_version` names `MAJOR.MINOR` (for example `"0.2"`). How changes are proposed and decided is described in [GOVERNANCE.md](GOVERNANCE.md).
+
 ## Appendix A. Change log
 
+- **0.2.2** — Editorial: cites RFC 8174 (only all-capital key words are normative); restates the compensation requirement of Section 5.2 with key words, as already required by the definitions in Section 3; removes outdated "v0.1" references; points to the conformance vectors from Section 11 (informative); adds Section 13, describing how versions are numbered. No conformance requirement changes.
 - **0.2.1** — Adds optional `server.packages` and `server.endpoints` to records (Section 5.1), so tools can recognise a server from how it is installed. Records keep `spec_version: '0.2'`.
 - **0.2.0** — Defines *restorable* by three conditions: recorded, writable by the principal, unobserved (Section 3). Adds Section 4.3 on recorded versus restorable and Section 5.6 on pre-image capture. R1 and R2 entries name their compensation (Section 5.2).
 - **0.1.0** — First public draft.

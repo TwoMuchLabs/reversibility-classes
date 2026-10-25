@@ -12,6 +12,7 @@ Usage: python scripts/release.py [--dry-run]
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -86,6 +87,10 @@ def main(dry_run: bool) -> int:
             f.write(r.notes)
         subprocess.check_call(["gh", "release", "create", r.tag, "--target", sha, "--title", r.title,
                                "--notes-file", f.name, f"--latest={'true' if r.tag == current else 'false'}"])
+        if r.tag == current and os.environ.get("GITHUB_OUTPUT"):
+            # Tells the build job which release to attach the wheel, sdist and provenance to.
+            with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+                out.write(f"released={r.tag}\n")
     return 0
 
 
