@@ -4,6 +4,7 @@
 
 ## Checklist
 
+- [ ] Every commit is signed off (`git commit -s`), certifying the [DCO](https://developercertificate.org/)
 - [ ] One server (or one dispute) per pull request
 - [ ] `server.source` is the repository people actually install, usually the vendor's official one
 - [ ] `server.version` pins the commit or release I verified against

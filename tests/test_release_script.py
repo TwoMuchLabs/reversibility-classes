@@ -10,10 +10,12 @@ spec.loader.exec_module(release)
 
 def test_parses_real_changelog():
     rs = release.parse_changelog((ROOT / "CHANGELOG.md").read_text())
+    by_tag = {r.tag: r for r in rs}
     tags = [r.tag for r in rs]
-    assert tags[:3] == ["v0.3.0", "v0.2.0", "v0.1.0"]
-    assert rs[0].title == "v0.3.0 — Check your own agent"
-    assert "rclass scan" in rs[0].notes and "## v0.2.0" not in rs[0].notes
+    assert tags.index("v0.3.0") < tags.index("v0.2.0") < tags.index("v0.1.0")  # newest first
+    v030 = by_tag["v0.3.0"]
+    assert v030.title == "v0.3.0 — Check your own agent"
+    assert "rclass scan" in v030.notes and "## v0.2.0" not in v030.notes
 
 
 def test_current_version_has_a_dated_section():

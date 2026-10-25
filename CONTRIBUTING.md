@@ -44,8 +44,21 @@ pytest -q
 
 AI-assisted contributions are welcome. Most of this registry was drafted with AI help and then checked. The rule is the same either way: **you are accountable for every tool name and every class you submit.** Say in the pull request which tools you used and what you checked by hand. The evidence links are how reviewers verify the work, so a tool name with no traceable source, or a class an AI proposed that you didn't check against the code, will be sent back.
 
+## Sign-off (Developer Certificate of Origin)
+
+Every commit in a pull request must be signed off, certifying the [Developer Certificate of Origin](https://developercertificate.org/): that you wrote the change, or otherwise have the right to submit it under the project's licenses. Add the line with `git commit -s`, which appends:
+
+```text
+Signed-off-by: Your Name <you@example.com>
+```
+
+The name and email must be yours, matching the commit author. A check on every pull request rejects commits without it; to fix older commits, run `git rebase --signoff main` and force-push your branch. Using AI tools does not change who signs: you do, and the sign-off is your statement that you checked the work (see above).
+
+Contributions are licensed under the license of the files they change: Apache 2.0 for the specification, schema and code, CC BY 4.0 for the registry and documentation ([details](LICENSE-SPEC-AND-DATA.md)).
+
 ## Before you open a pull request
 
+- **Sign off every commit** (`git commit -s`).
 - **One server per pull request.** Claim it on the [help-wanted issue](https://github.com/TwoMuchLabs/reversibility-classes/issues/5) first, so two people don't do the same one.
 - **Use the server people actually install.** That is usually the vendor's official repository, not a fork or an older copy. Say which in `server.source`.
 - **Pin what you checked.** Put the commit or release you verified against in `server.version`.

@@ -4,11 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "rclass"
-version = "0.3.0"
+version = "0.3.1"
 description = "Reversibility Classes (R0-R4) for AI agent tool calls: spec, open registry and reference classifier"
 readme = "README.md"
 requires-python = ">=3.10"
-license = "Apache-2.0"
+license = "Apache-2.0 AND CC-BY-4.0"
+license-files = ["LICENSE", "LICENSE-SPEC-AND-DATA.md"]
 authors = [{ name = "Deepak Waghmare" }]
 keywords = ["ai-agents", "mcp", "model-context-protocol", "ai-governance", "agent-security", "guardrails", "eu-ai-act"]
 classifiers = [

@@ -3,7 +3,7 @@
 **Version:** 0.2.1 (draft)
 **Status:** Request for comments
 **Editor:** Deepak Waghmare
-**License:** This document is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+**License:** This specification is licensed under the [Apache License 2.0](LICENSE), which includes a patent grant to implementers. Versions published before 25 October 2026 were licensed under CC BY 4.0.
 
 ---
 

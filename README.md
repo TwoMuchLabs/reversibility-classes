@@ -156,6 +156,6 @@ The specification is v0.2.1, a draft for comment; `rclass` 0.3 implements it and
 
 ## License
 
-Specification, schema and registry: [CC BY 4.0](LICENSE-SPEC-AND-DATA.md). Code: [Apache 2.0](LICENSE). To cite, see [CITATION.cff](CITATION.cff).
+Specification, schema, conformance vectors and code: [Apache 2.0](LICENSE), which includes a patent grant to implementers. Registry data and other documentation: [CC BY 4.0](LICENSE-SPEC-AND-DATA.md). To cite, see [CITATION.cff](CITATION.cff).
 
 A [Two Much Labs](https://twomuchlabs.com) project. Maintained by [Deepak Waghmare](https://github.com/waghmaredb). Written in a personal capacity.

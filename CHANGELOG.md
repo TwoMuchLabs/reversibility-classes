@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.3.1 — 2026-10-25
+
+**The specification is now Apache 2.0.**
+
+- **Licensing.** The specification, schema and conformance vectors move from CC BY 4.0 to the [Apache License 2.0](LICENSE), the same license as the code. Apache 2.0 includes a patent grant to everyone who implements the specification; CC BY 4.0 grants no patent rights. This matches the Model Context Protocol, which licenses its specification under Apache 2.0. The registry data and other documentation stay under CC BY 4.0. Versions published before this release remain available under CC BY 4.0. Details: [LICENSE-SPEC-AND-DATA.md](LICENSE-SPEC-AND-DATA.md).
+- **Developer Certificate of Origin.** Every commit in a pull request must now be signed off (`git commit -s`); a check enforces it. See [CONTRIBUTING.md](CONTRIBUTING.md#sign-off-developer-certificate-of-origin).
+- **Least-privilege workflows.** The drift check, which runs the latest releases of third-party MCP servers, now holds no write token and leaves no credentials on disk; a separate job files the issue. CI and release default to read-only tokens.
+- The drift check opens its issue when a server cannot be checked, instead of passing.
+
+**Install:** `pip install git+https://github.com/TwoMuchLabs/reversibility-classes@v0.3.1`
+
 ## v0.3.0 — 2026-10-25
 
 **Check your own agent.**
