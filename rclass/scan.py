@@ -470,14 +470,17 @@ def identify_by_endpoint(cfg: ServerConfig, registry: Registry) -> tuple[str | N
     if not cfg.url:
         return None, False
     url = cfg.url.split("?", 1)[0].split("#", 1)[0].rstrip("/").lower()
+    matches: dict[str, bool] = {}
     for rec in registry.records:
         for ep in rec["server"].get("endpoints", []):
             e = ep.rstrip("/").lower()
-            if url == e:
-                return rec["server"]["id"], True
-            if url.startswith(e + "/"):
-                return rec["server"]["id"], False
-    return None, False
+            if url == e or url.startswith(e + "/"):
+                sid = rec["server"]["id"]
+                matches[sid] = matches.get(sid, False) or url == e
+    if len(matches) != 1:
+        return None, False  # none, or claimed by records with different ids: unrecognised, as for packages
+    (sid, exact), = matches.items()
+    return sid, exact
 
 
 def _tool_names(registry: Registry, sid: str) -> set[str]:

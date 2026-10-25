@@ -437,7 +437,18 @@ def main(argv: list[str] | None = None) -> int:
     po.add_argument("--override", action="append", help="deployment override record (repeatable)")
     po.set_defaults(fn=cmd_policy)
 
-    ns = p.parse_args(argv)
+    args = sys.argv[1:] if argv is None else argv
+    if args[:1] == ["hook"]:
+        # A mistyped flag must not exit 2: the hook sees every tool, and exit 2 would block all of them.
+        try:
+            ns = p.parse_args(args)
+        except SystemExit as exc:
+            if exc.code in (0, None):
+                raise
+            from .gate import ask_on_error
+            return ask_on_error(sys.stdout, "rclass hook is misconfigured: bad command-line arguments")
+    else:
+        ns = p.parse_args(args)
     try:
         return ns.fn(ns)
     except (UsageError, RecordError) as exc:
