@@ -1,0 +1,1511 @@
+{
+  "$comment": "Conformance vectors for Reversibility Classes. See docs/conformance.md.",
+  "spec_version": "0.2",
+  "records": {
+    "db": {
+      "spec_version": "0.2",
+      "server": {
+        "id": "db",
+        "name": "Db",
+        "source": "https://example.test/server",
+        "evidence": [
+          "https://example.test/server/tools.ts"
+        ]
+      },
+      "tools": [
+        {
+          "name": "read",
+          "class": "R0",
+          "rationale": "Reads."
+        },
+        {
+          "name": "execute_sql",
+          "class": "R4",
+          "rationale": "Arbitrary SQL.",
+          "when": [
+            {
+              "arg": "query",
+              "matches": "^\\s*SELECT\\b[^;]*;?\\s*$",
+              "class": "R0",
+              "rationale": "One SELECT."
+            },
+            {
+              "arg": "query",
+              "matches": "^\\s*SELECT\\b",
+              "class": "R1",
+              "rationale": "Never reached when the first rule matches."
+            }
+          ]
+        },
+        {
+          "name": "deploy",
+          "class": "R3",
+          "rationale": "Deploys.",
+          "when": [
+            {
+              "all": [
+                {
+                  "arg": "env",
+                  "in": [
+                    "dev",
+                    "test"
+                  ]
+                },
+                {
+                  "arg": "options.force",
+                  "absent": true
+                }
+              ],
+              "class": "R1",
+              "rationale": "Non-forced deploy to a scratch environment."
+            }
+          ]
+        },
+        {
+          "name": "toggle",
+          "class": "R3",
+          "rationale": "Toggles a flag.",
+          "when": [
+            {
+              "arg": "dry_run",
+              "equals": true,
+              "class": "R0",
+              "rationale": "Dry run only."
+            },
+            {
+              "arg": "count",
+              "equals": 1,
+              "class": "R1",
+              "rationale": "A single item."
+            },
+            {
+              "arg": "confirm",
+              "absent": true,
+              "class": "R2",
+              "rationale": "Unconfirmed calls only stage the change."
+            }
+          ]
+        },
+        {
+          "name": "send",
+          "class": "R4",
+          "disclosure": true,
+          "rationale": "Sends a message."
+        },
+        {
+          "name": "wipe",
+          "class": "R4",
+          "rationale": "Deletes with no backup."
+        },
+        {
+          "name": "write",
+          "class": "R4",
+          "rationale": "Overwrites a file with no history."
+        }
+      ]
+    },
+    "db_strict": {
+      "spec_version": "0.2",
+      "server": {
+        "id": "db",
+        "name": "Db",
+        "source": "https://example.test/server",
+        "evidence": [
+          "https://example.test/server/tools.ts"
+        ]
+      },
+      "tools": [
+        {
+          "name": "read",
+          "class": "R2",
+          "rationale": "A second registry disagrees."
+        }
+      ]
+    },
+    "defaulted": {
+      "spec_version": "0.2",
+      "server": {
+        "id": "defaulted",
+        "name": "Defaulted",
+        "source": "https://example.test/server",
+        "evidence": [
+          "https://example.test/server/tools.ts"
+        ]
+      },
+      "tools": [
+        {
+          "name": "known",
+          "class": "R1",
+          "rationale": "Known."
+        }
+      ],
+      "default_class": "R2"
+    }
+  },
+  "cases": [
+    {
+      "id": "base-class",
+      "spec": "5.2",
+      "description": "A listed tool with no rules gets its base class.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "db",
+        "tool": "read"
+      },
+      "expect": {
+        "class": "R0",
+        "source": "registry"
+      }
+    },
+    {
+      "id": "highest-across-records",
+      "spec": "4.1 rule 1, 5.4",
+      "description": "When two records classify the same tool, the highest class wins.",
+      "registry": [
+        "db",
+        "db_strict"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "db",
+        "tool": "read"
+      },
+      "expect": {
+        "class": "R2",
+        "source": "registry"
+      }
+    },
+    {
+      "id": "rule-matches",
+      "spec": "5.3",
+      "description": "A matching rule sets the class.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "db",
+        "tool": "execute_sql",
+        "arguments": {
+          "query": "SELECT 1"
+        }
+      },
+      "expect": {
+        "class": "R0",
+        "source": "rule",
+        "rule_index": 0
+      }
+    },
+    {
+      "id": "rule-first-match-wins",
+      "spec": "5.3",
+      "description": "Rules are evaluated in order; the first match wins even if a later rule also matches.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "db",
+        "tool": "execute_sql",
+        "arguments": {
+          "query": "select id from t;"
+        }
+      },
+      "expect": {
+        "class": "R0",
+        "source": "rule",
+        "rule_index": 0
+      }
+    },
+    {
+      "id": "rule-case-insensitive",
+      "spec": "5.3",
+      "description": "`matches` is case-insensitive.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "db",
+        "tool": "execute_sql",
+        "arguments": {
+          "query": "sElEcT 1"
+        }
+      },
+      "expect": {
+        "class": "R0",
+        "source": "rule"
+      }
+    },
+    {
+      "id": "rule-anchored-allow-list",
+      "spec": "5.3",
+      "description": "An anchored allow-list does not match a second statement, so evaluation moves to the next rule (here an unanchored one, which matches).",
+      "registry": [
+        "db"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "db",
+        "tool": "execute_sql",
+        "arguments": {
+          "query": "SELECT 1; DROP TABLE t"
+        }
+      },
+      "expect": {
+        "class": "R1",
+        "source": "rule",
+        "rule_index": 1
+      }
+    },
+    {
+      "id": "rule-no-match-base",
+      "spec": "5.3",
+      "description": "No rule matches: the base class applies.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "db",
+        "tool": "execute_sql",
+        "arguments": {
+          "query": "DELETE FROM t"
+        }
+      },
+      "expect": {
+        "class": "R4",
+        "source": "registry"
+      }
+    },
+    {
+      "id": "rule-missing-arguments",
+      "spec": "5.3 safety",
+      "description": "Missing arguments never match `matches`; fall back to the base class.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "db",
+        "tool": "execute_sql"
+      },
+      "expect": {
+        "class": "R4",
+        "source": "registry"
+      }
+    },
+    {
+      "id": "rule-null-argument",
+      "spec": "5.3 safety",
+      "description": "A null argument never matches `matches`.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "db",
+        "tool": "execute_sql",
+        "arguments": {
+          "query": null
+        }
+      },
+      "expect": {
+        "class": "R4",
+        "source": "registry"
+      }
+    },
+    {
+      "id": "rule-wrong-type",
+      "spec": "5.3 safety",
+      "description": "A list where a string is expected never matches.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "db",
+        "tool": "execute_sql",
+        "arguments": {
+          "query": [
+            "SELECT 1"
+          ]
+        }
+      },
+      "expect": {
+        "class": "R4",
+        "source": "registry"
+      }
+    },
+    {
+      "id": "rule-boolean-not-string",
+      "spec": "5.3 safety",
+      "description": "A boolean is not matched by `matches`.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "db",
+        "tool": "execute_sql",
+        "arguments": {
+          "query": true
+        }
+      },
+      "expect": {
+        "class": "R4",
+        "source": "registry"
+      }
+    },
+    {
+      "id": "equals-type-strict-bool",
+      "spec": "5.3",
+      "description": "`equals: true` does not match the string \"true\".",
+      "registry": [
+        "db"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "db",
+        "tool": "toggle",
+        "arguments": {
+          "dry_run": "true",
+          "confirm": "yes"
+        }
+      },
+      "expect": {
+        "class": "R3",
+        "source": "registry"
+      }
+    },
+    {
+      "id": "equals-bool",
+      "spec": "5.3",
+      "description": "`equals: true` matches JSON true.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "db",
+        "tool": "toggle",
+        "arguments": {
+          "dry_run": true
+        }
+      },
+      "expect": {
+        "class": "R0",
+        "source": "rule",
+        "rule_index": 0
+      }
+    },
+    {
+      "id": "equals-type-strict-number",
+      "spec": "5.3",
+      "description": "`equals: 1` does not match JSON true, even where a language treats true as 1.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "db",
+        "tool": "toggle",
+        "arguments": {
+          "count": true,
+          "confirm": "yes"
+        }
+      },
+      "expect": {
+        "class": "R3",
+        "source": "registry"
+      }
+    },
+    {
+      "id": "equals-number",
+      "spec": "5.3",
+      "description": "`equals: 1` matches the number 1.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "db",
+        "tool": "toggle",
+        "arguments": {
+          "count": 1
+        }
+      },
+      "expect": {
+        "class": "R1",
+        "source": "rule",
+        "rule_index": 1
+      }
+    },
+    {
+      "id": "absent-when-missing",
+      "spec": "5.3",
+      "description": "`absent: true` matches when the argument is not present.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "db",
+        "tool": "toggle",
+        "arguments": {}
+      },
+      "expect": {
+        "class": "R2",
+        "source": "rule",
+        "rule_index": 2
+      }
+    },
+    {
+      "id": "absent-not-when-null",
+      "spec": "5.3",
+      "description": "An argument present with value null is present: `absent: true` does not match.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "db",
+        "tool": "toggle",
+        "arguments": {
+          "confirm": null
+        }
+      },
+      "expect": {
+        "class": "R3",
+        "source": "registry"
+      }
+    },
+    {
+      "id": "in-and-nested-path",
+      "spec": "5.3",
+      "description": "`in` and a dotted path into a nested object, under `all`.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "db",
+        "tool": "deploy",
+        "arguments": {
+          "env": "dev"
+        }
+      },
+      "expect": {
+        "class": "R1",
+        "source": "rule",
+        "rule_index": 0
+      }
+    },
+    {
+      "id": "all-one-condition-fails",
+      "spec": "5.3",
+      "description": "`all` needs every condition: a forced deploy keeps the base class.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "db",
+        "tool": "deploy",
+        "arguments": {
+          "env": "dev",
+          "options": {
+            "force": true
+          }
+        }
+      },
+      "expect": {
+        "class": "R3",
+        "source": "registry"
+      }
+    },
+    {
+      "id": "in-no-match",
+      "spec": "5.3",
+      "description": "A value outside `in` does not match.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "db",
+        "tool": "deploy",
+        "arguments": {
+          "env": "prod"
+        }
+      },
+      "expect": {
+        "class": "R3",
+        "source": "registry"
+      }
+    },
+    {
+      "id": "unknown-tool",
+      "spec": "6",
+      "description": "A tool with no record fails closed at R4.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "db",
+        "tool": "nonexistent"
+      },
+      "expect": {
+        "class": "R4",
+        "source": "fail-closed"
+      }
+    },
+    {
+      "id": "unknown-server",
+      "spec": "6",
+      "description": "A server with no record fails closed at R4.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "nobody",
+        "tool": "anything"
+      },
+      "expect": {
+        "class": "R4",
+        "source": "fail-closed"
+      }
+    },
+    {
+      "id": "default-class",
+      "spec": "5.1",
+      "description": "A record's default_class covers its unlisted tools.",
+      "registry": [
+        "defaulted"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "defaulted",
+        "tool": "other"
+      },
+      "expect": {
+        "class": "R2",
+        "source": "registry"
+      }
+    },
+    {
+      "id": "annotations-untrusted-ignored",
+      "spec": "6, 7",
+      "description": "Annotations from a server not marked trusted are ignored.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "nobody",
+        "tool": "t",
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "trusted_server": false
+      },
+      "expect": {
+        "class": "R4",
+        "source": "fail-closed"
+      }
+    },
+    {
+      "id": "annotations-trusted",
+      "spec": "7",
+      "description": "Annotations from a trusted server give a provisional class.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "nobody",
+        "tool": "t",
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "trusted_server": true
+      },
+      "expect": {
+        "class": "R0",
+        "source": "annotations"
+      }
+    },
+    {
+      "id": "registry-beats-annotations",
+      "spec": "7",
+      "description": "A registry record takes precedence over annotations.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "db",
+        "tool": "wipe",
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "trusted_server": true
+      },
+      "expect": {
+        "class": "R4",
+        "source": "registry"
+      }
+    },
+    {
+      "id": "default-class-beats-annotations",
+      "spec": "5.1, 7",
+      "description": "A record's default_class takes precedence over annotations.",
+      "registry": [
+        "defaulted"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "defaulted",
+        "tool": "other",
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "trusted_server": true
+      },
+      "expect": {
+        "class": "R2",
+        "source": "registry"
+      }
+    },
+    {
+      "id": "annotation-map-0",
+      "spec": "7",
+      "description": "Read-only wins regardless of other hints.",
+      "registry": [],
+      "overrides": [],
+      "call": {
+        "server": "nobody",
+        "tool": "t",
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "trusted_server": true
+      },
+      "expect": {
+        "class": "R0",
+        "source": "annotations"
+      }
+    },
+    {
+      "id": "annotation-map-1",
+      "spec": "7",
+      "description": "Read-only wins regardless of other hints.",
+      "registry": [],
+      "overrides": [],
+      "call": {
+        "server": "nobody",
+        "tool": "t",
+        "annotations": {
+          "readOnlyHint": true,
+          "destructiveHint": true,
+          "openWorldHint": true
+        },
+        "trusted_server": true
+      },
+      "expect": {
+        "class": "R0",
+        "source": "annotations"
+      }
+    },
+    {
+      "id": "annotation-map-2",
+      "spec": "7",
+      "description": "All hints absent: MCP defaults are not read-only, destructive, open world.",
+      "registry": [],
+      "overrides": [],
+      "call": {
+        "server": "nobody",
+        "tool": "t",
+        "annotations": {},
+        "trusted_server": true
+      },
+      "expect": {
+        "class": "R4",
+        "source": "annotations"
+      }
+    },
+    {
+      "id": "annotation-map-3",
+      "spec": "7",
+      "description": "Writes to an open world may be disclosure.",
+      "registry": [],
+      "overrides": [],
+      "call": {
+        "server": "nobody",
+        "tool": "t",
+        "annotations": {
+          "readOnlyHint": false,
+          "openWorldHint": true
+        },
+        "trusted_server": true
+      },
+      "expect": {
+        "class": "R4",
+        "source": "annotations"
+      }
+    },
+    {
+      "id": "annotation-map-4",
+      "spec": "7",
+      "description": "openWorldHint defaults to true.",
+      "registry": [],
+      "overrides": [],
+      "call": {
+        "server": "nobody",
+        "tool": "t",
+        "annotations": {
+          "destructiveHint": false
+        },
+        "trusted_server": true
+      },
+      "expect": {
+        "class": "R4",
+        "source": "annotations"
+      }
+    },
+    {
+      "id": "annotation-map-5",
+      "spec": "7",
+      "description": "Additive writes to a closed world.",
+      "registry": [],
+      "overrides": [],
+      "call": {
+        "server": "nobody",
+        "tool": "t",
+        "annotations": {
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "trusted_server": true
+      },
+      "expect": {
+        "class": "R1",
+        "source": "annotations"
+      }
+    },
+    {
+      "id": "annotation-map-6",
+      "spec": "7",
+      "description": "Destructive writes to a closed world.",
+      "registry": [],
+      "overrides": [],
+      "call": {
+        "server": "nobody",
+        "tool": "t",
+        "annotations": {
+          "destructiveHint": true,
+          "openWorldHint": false
+        },
+        "trusted_server": true
+      },
+      "expect": {
+        "class": "R3",
+        "source": "annotations"
+      }
+    },
+    {
+      "id": "annotation-map-7",
+      "spec": "7",
+      "description": "destructiveHint defaults to true.",
+      "registry": [],
+      "overrides": [],
+      "call": {
+        "server": "nobody",
+        "tool": "t",
+        "annotations": {
+          "openWorldHint": false
+        },
+        "trusted_server": true
+      },
+      "expect": {
+        "class": "R3",
+        "source": "annotations"
+      }
+    },
+    {
+      "id": "annotation-map-8",
+      "spec": "7",
+      "description": "A non-boolean hint is not true; treat it as absent.",
+      "registry": [],
+      "overrides": [],
+      "call": {
+        "server": "nobody",
+        "tool": "t",
+        "annotations": {
+          "readOnlyHint": "true"
+        },
+        "trusted_server": true
+      },
+      "expect": {
+        "class": "R4",
+        "source": "annotations"
+      }
+    },
+    {
+      "id": "override-raises",
+      "spec": "5.5",
+      "description": "An override may raise any class.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [
+        {
+          "record": {
+            "spec_version": "0.2",
+            "server": {
+              "id": "db",
+              "name": "Db",
+              "source": "https://example.test/server",
+              "evidence": [
+                "https://example.test/server/tools.ts"
+              ]
+            },
+            "tools": [
+              {
+                "name": "read",
+                "class": "R2",
+                "rationale": "This table holds personal data."
+              }
+            ]
+          },
+          "reason": "PII table"
+        }
+      ],
+      "call": {
+        "server": "db",
+        "tool": "read"
+      },
+      "expect": {
+        "class": "R2",
+        "source": "override"
+      }
+    },
+    {
+      "id": "override-lowers",
+      "spec": "5.5",
+      "description": "An override may lower a non-disclosure class.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [
+        {
+          "record": {
+            "spec_version": "0.2",
+            "server": {
+              "id": "db",
+              "name": "Db",
+              "source": "https://example.test/server",
+              "evidence": [
+                "https://example.test/server/tools.ts"
+              ]
+            },
+            "tools": [
+              {
+                "name": "wipe",
+                "class": "R3",
+                "rationale": "Restorable from snapshots."
+              }
+            ]
+          },
+          "reason": "nightly snapshots"
+        }
+      ],
+      "call": {
+        "server": "db",
+        "tool": "wipe"
+      },
+      "expect": {
+        "class": "R3",
+        "source": "override"
+      }
+    },
+    {
+      "id": "override-cannot-lower-disclosure",
+      "spec": "4.1 rule 6, 5.5",
+      "description": "An override cannot lower a disclosure tool.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [
+        {
+          "record": {
+            "spec_version": "0.2",
+            "server": {
+              "id": "db",
+              "name": "Db",
+              "source": "https://example.test/server",
+              "evidence": [
+                "https://example.test/server/tools.ts"
+              ]
+            },
+            "tools": [
+              {
+                "name": "send",
+                "class": "R1",
+                "rationale": "Trust me."
+              }
+            ]
+          },
+          "reason": "please"
+        }
+      ],
+      "call": {
+        "server": "db",
+        "tool": "send"
+      },
+      "expect": {
+        "class": "R4",
+        "source": "registry"
+      }
+    },
+    {
+      "id": "override-lowers-disclosure-with-assertion",
+      "spec": "5.5",
+      "description": "An override that asserts `disclosure: false` may lower a disclosure tool.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [
+        {
+          "record": {
+            "spec_version": "0.2",
+            "server": {
+              "id": "db",
+              "name": "Db",
+              "source": "https://example.test/server",
+              "evidence": [
+                "https://example.test/server/tools.ts"
+              ]
+            },
+            "tools": [
+              {
+                "name": "send",
+                "class": "R1",
+                "disclosure": false,
+                "rationale": "Only reaches an internal sandbox."
+              }
+            ]
+          },
+          "reason": "sandbox only"
+        }
+      ],
+      "call": {
+        "server": "db",
+        "tool": "send"
+      },
+      "expect": {
+        "class": "R1",
+        "source": "override"
+      }
+    },
+    {
+      "id": "override-equal-no-change",
+      "spec": "5.5",
+      "description": "An override with the same class changes nothing.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [
+        {
+          "record": {
+            "spec_version": "0.2",
+            "server": {
+              "id": "db",
+              "name": "Db",
+              "source": "https://example.test/server",
+              "evidence": [
+                "https://example.test/server/tools.ts"
+              ]
+            },
+            "tools": [
+              {
+                "name": "wipe",
+                "class": "R4",
+                "rationale": "Same."
+              }
+            ]
+          },
+          "reason": "no-op"
+        }
+      ],
+      "call": {
+        "server": "db",
+        "tool": "wipe"
+      },
+      "expect": {
+        "class": "R4",
+        "source": "registry"
+      }
+    },
+    {
+      "id": "override-unregistered-tool",
+      "spec": "5.5",
+      "description": "An override may classify a tool the open registry does not list.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [
+        {
+          "record": {
+            "spec_version": "0.2",
+            "server": {
+              "id": "db",
+              "name": "Db",
+              "source": "https://example.test/server",
+              "evidence": [
+                "https://example.test/server/tools.ts"
+              ]
+            },
+            "tools": [
+              {
+                "name": "internal",
+                "class": "R1",
+                "rationale": "Our tool."
+              }
+            ]
+          },
+          "reason": "in-house"
+        }
+      ],
+      "call": {
+        "server": "db",
+        "tool": "internal"
+      },
+      "expect": {
+        "class": "R1",
+        "source": "override"
+      }
+    },
+    {
+      "id": "override-own-rules",
+      "spec": "5.5",
+      "description": "An override's own rules are evaluated against the arguments.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [
+        {
+          "record": {
+            "spec_version": "0.2",
+            "server": {
+              "id": "db",
+              "name": "Db",
+              "source": "https://example.test/server",
+              "evidence": [
+                "https://example.test/server/tools.ts"
+              ]
+            },
+            "tools": [
+              {
+                "name": "wipe",
+                "class": "R4",
+                "rationale": "Unchanged by default.",
+                "when": [
+                  {
+                    "arg": "table",
+                    "equals": "scratch",
+                    "class": "R1",
+                    "rationale": "The scratch table is rebuilt hourly."
+                  }
+                ]
+              }
+            ]
+          },
+          "reason": "scratch table"
+        }
+      ],
+      "call": {
+        "server": "db",
+        "tool": "wipe",
+        "arguments": {
+          "table": "scratch"
+        }
+      },
+      "expect": {
+        "class": "R1",
+        "source": "override"
+      }
+    },
+    {
+      "id": "preimage-lowers",
+      "spec": "5.6",
+      "description": "A pre-image override makes the tool R1, conditional on capture; the fallback is the class without it.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [
+        {
+          "record": {
+            "spec_version": "0.2",
+            "server": {
+              "id": "db",
+              "name": "Db",
+              "source": "https://example.test/server",
+              "evidence": [
+                "https://example.test/server/tools.ts"
+              ]
+            },
+            "tools": [
+              {
+                "name": "write",
+                "class": "R1",
+                "rationale": "The gateway copies the file first.",
+                "preimage": {
+                  "captures": "full content of the file at path",
+                  "restore": "copy it back",
+                  "retention": "P30D"
+                }
+              }
+            ]
+          },
+          "reason": "gateway capture"
+        }
+      ],
+      "call": {
+        "server": "db",
+        "tool": "write"
+      },
+      "expect": {
+        "class": "R1",
+        "source": "override",
+        "preimage": true,
+        "fallback": "R4"
+      }
+    },
+    {
+      "id": "preimage-unregistered-tool",
+      "spec": "5.6, 6",
+      "description": "A pre-image override on an unlisted tool falls back to R4 if capture fails.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [
+        {
+          "record": {
+            "spec_version": "0.2",
+            "server": {
+              "id": "db",
+              "name": "Db",
+              "source": "https://example.test/server",
+              "evidence": [
+                "https://example.test/server/tools.ts"
+              ]
+            },
+            "tools": [
+              {
+                "name": "internal_write",
+                "class": "R1",
+                "rationale": "Captured.",
+                "preimage": {
+                  "captures": "full content of the file at path",
+                  "restore": "copy it back",
+                  "retention": "P30D"
+                }
+              }
+            ]
+          },
+          "reason": "gateway capture"
+        }
+      ],
+      "call": {
+        "server": "db",
+        "tool": "internal_write"
+      },
+      "expect": {
+        "class": "R1",
+        "source": "override",
+        "preimage": true,
+        "fallback": "R4"
+      }
+    },
+    {
+      "id": "preimage-cannot-lower-disclosure",
+      "spec": "5.6 rule 3",
+      "description": "Capturing state cannot lower a disclosure.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [
+        {
+          "record": {
+            "spec_version": "0.2",
+            "server": {
+              "id": "db",
+              "name": "Db",
+              "source": "https://example.test/server",
+              "evidence": [
+                "https://example.test/server/tools.ts"
+              ]
+            },
+            "tools": [
+              {
+                "name": "send",
+                "class": "R1",
+                "rationale": "Captured the draft.",
+                "preimage": {
+                  "captures": "full content of the file at path",
+                  "restore": "copy it back",
+                  "retention": "P30D"
+                }
+              }
+            ]
+          },
+          "reason": "capture"
+        }
+      ],
+      "call": {
+        "server": "db",
+        "tool": "send"
+      },
+      "expect": {
+        "class": "R4",
+        "source": "registry"
+      }
+    }
+  ],
+  "invalid_records": [
+    {
+      "id": "disclosure-not-r4",
+      "spec": "4.1 rule 2",
+      "record": {
+        "spec_version": "0.2",
+        "server": {
+          "id": "x",
+          "name": "X",
+          "source": "https://example.test/server",
+          "evidence": [
+            "https://example.test/server/tools.ts"
+          ]
+        },
+        "tools": [
+          {
+            "name": "t",
+            "class": "R2",
+            "disclosure": true,
+            "rationale": "r"
+          }
+        ]
+      }
+    },
+    {
+      "id": "duplicate-tool",
+      "spec": "5.2",
+      "record": {
+        "spec_version": "0.2",
+        "server": {
+          "id": "x",
+          "name": "X",
+          "source": "https://example.test/server",
+          "evidence": [
+            "https://example.test/server/tools.ts"
+          ]
+        },
+        "tools": [
+          {
+            "name": "t",
+            "class": "R0",
+            "rationale": "r"
+          },
+          {
+            "name": "t",
+            "class": "R1",
+            "rationale": "r"
+          }
+        ]
+      }
+    },
+    {
+      "id": "unknown-class",
+      "spec": "4",
+      "record": {
+        "spec_version": "0.2",
+        "server": {
+          "id": "x",
+          "name": "X",
+          "source": "https://example.test/server",
+          "evidence": [
+            "https://example.test/server/tools.ts"
+          ]
+        },
+        "tools": [
+          {
+            "name": "t",
+            "class": "R5",
+            "rationale": "r"
+          }
+        ]
+      }
+    },
+    {
+      "id": "missing-rationale",
+      "spec": "5.2",
+      "record": {
+        "spec_version": "0.2",
+        "server": {
+          "id": "x",
+          "name": "X",
+          "source": "https://example.test/server",
+          "evidence": [
+            "https://example.test/server/tools.ts"
+          ]
+        },
+        "tools": [
+          {
+            "name": "t",
+            "class": "R0"
+          }
+        ]
+      }
+    },
+    {
+      "id": "bad-spec-version",
+      "spec": "5.1",
+      "record": {
+        "spec_version": "9.9",
+        "server": {
+          "id": "x",
+          "name": "X",
+          "source": "https://example.test/server",
+          "evidence": [
+            "https://example.test/server/tools.ts"
+          ]
+        },
+        "tools": [
+          {
+            "name": "t",
+            "class": "R0",
+            "rationale": "r"
+          }
+        ]
+      }
+    },
+    {
+      "id": "preimage-not-r1",
+      "spec": "5.6 rule 2",
+      "record": {
+        "spec_version": "0.2",
+        "server": {
+          "id": "x",
+          "name": "X",
+          "source": "https://example.test/server",
+          "evidence": [
+            "https://example.test/server/tools.ts"
+          ]
+        },
+        "tools": [
+          {
+            "name": "t",
+            "class": "R2",
+            "rationale": "r",
+            "preimage": {
+              "captures": "full content of the file at path",
+              "restore": "copy it back",
+              "retention": "P30D"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "preimage-on-disclosure",
+      "spec": "5.6 rule 3",
+      "record": {
+        "spec_version": "0.2",
+        "server": {
+          "id": "x",
+          "name": "X",
+          "source": "https://example.test/server",
+          "evidence": [
+            "https://example.test/server/tools.ts"
+          ]
+        },
+        "tools": [
+          {
+            "name": "t",
+            "class": "R4",
+            "disclosure": true,
+            "rationale": "r",
+            "preimage": {
+              "captures": "full content of the file at path",
+              "restore": "copy it back",
+              "retention": "P30D"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "package-with-version",
+      "spec": "5.1",
+      "record": {
+        "spec_version": "0.2",
+        "server": {
+          "id": "x",
+          "name": "X",
+          "source": "https://example.test/server",
+          "evidence": [
+            "https://example.test/server/tools.ts"
+          ],
+          "packages": [
+            "@scope/pkg@1.2.3"
+          ]
+        },
+        "tools": [
+          {
+            "name": "t",
+            "class": "R0",
+            "rationale": "r"
+          }
+        ]
+      }
+    },
+    {
+      "id": "rule-with-two-matchers",
+      "spec": "5.3",
+      "record": {
+        "spec_version": "0.2",
+        "server": {
+          "id": "x",
+          "name": "X",
+          "source": "https://example.test/server",
+          "evidence": [
+            "https://example.test/server/tools.ts"
+          ]
+        },
+        "tools": [
+          {
+            "name": "t",
+            "class": "R4",
+            "rationale": "r",
+            "when": [
+              {
+                "arg": "a",
+                "equals": 1,
+                "in": [
+                  1
+                ],
+                "class": "R0",
+                "rationale": "r"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
