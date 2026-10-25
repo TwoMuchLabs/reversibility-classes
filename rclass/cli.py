@@ -277,14 +277,21 @@ def _gate_args(ns: argparse.Namespace) -> list[str]:
 
 
 def cmd_hook(ns: argparse.Namespace) -> int:
-    from .gate import run_hook
-    policy = _gate_policy(ns)
-    mapping = _parse_assume(ns.map)
-    reg = _registry(ns.registry, ns.override)
-    bad = [r for r in mapping.values() if r not in reg.servers()]
-    if bad:
-        raise UsageError(f"--map names {', '.join(bad)}, which {'is' if len(bad) == 1 else 'are'} not in the registry")
-    return run_hook(sys.stdin, sys.stdout, policy, lambda: reg, mapping, Path(ns.log).expanduser() if ns.log else None)
+    """Every failure, including a bad flag or an unreadable registry, answers "ask" and exits 0, because
+    Claude Code treats any other exit code except 2 as "no decision" and would run the call ungated."""
+    from .gate import ask_on_error, run_hook, state_dir
+    try:
+        policy = _gate_policy(ns)
+        mapping = _parse_assume(ns.map)
+        reg = _registry(ns.registry, ns.override)
+        bad = [r for r in mapping.values() if r not in reg.servers()]
+        if bad:
+            raise UsageError(f"--map names {', '.join(bad)}, which {'is' if len(bad) == 1 else 'are'} not in the registry")
+        log = None if ns.no_log else Path(ns.log).expanduser() if ns.log else state_dir() / "audit.jsonl"
+    except Exception as exc:  # noqa: BLE001
+        print(f"rclass hook: {exc}", file=sys.stderr)
+        return ask_on_error(sys.stdout, f"rclass hook is misconfigured: {exc.__class__.__name__}")
+    return run_hook(sys.stdin, sys.stdout, policy, lambda: reg, mapping, log)
 
 
 def cmd_policy(ns: argparse.Namespace) -> int:
@@ -395,7 +402,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="block calls at or above this class instead of asking")
     hk.add_argument("--map", action="append", metavar="SERVER=RECORD",
                     help="treat a configured server as a registry record (you vouch for it; repeatable)")
-    hk.add_argument("--log", metavar="FILE", help="append one JSON line per decision (class, rule, decision; no arguments)")
+    hk.add_argument("--log", metavar="FILE", help="where to append one JSON line per decision (class, rule, session's "
+                    "effective class, decision; never arguments). Default: ~/.local/state/rclass/audit.jsonl")
+    hk.add_argument("--no-log", action="store_true", help="do not write the decision log")
     hk.add_argument("--registry", action="append", help="extra registry path (repeatable)")
     hk.add_argument("--override", action="append", help="deployment override record (repeatable)")
     hk.set_defaults(fn=cmd_hook)

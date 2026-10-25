@@ -74,6 +74,16 @@ def from_mcp_annotations(annotations: Mapping[str, Any] | None) -> RClass:
     return RClass.R3 if destructive else RClass.R1
 
 
+def _strictest_override(reg: Registry, server: str, tool: str, args):
+    """When several overrides cover a tool, the one giving this call the highest class applies (SPEC 5.4)."""
+    best = None
+    for entry, reason in reg.overrides(server, tool):
+        ev = _evaluate(entry, args)
+        if best is None or ev[0] > best[2][0]:
+            best = (entry, reason, ev)
+    return best
+
+
 def classify(
     server: str,
     tool: str,
@@ -98,10 +108,9 @@ def classify(
         source = "rule" if rule_index is not None else "registry"
         result = Classification(rclass, source, rationale, server, tool, rule_index)
 
-        ov = reg.override(server, tool)
+        ov = _strictest_override(reg, server, tool, args)
         if ov is not None:
-            ov_entry, reason = ov
-            ov_class, ov_rationale, ov_rule = _evaluate(ov_entry, args)
+            ov_entry, reason, (ov_class, ov_rationale, ov_rule) = ov
             disclosure = any(e.disclosure for e in entries)
             # A disclosure tool may be lowered only when the override explicitly asserts
             # that, in this deployment, it reaches no one outside the principal (SPEC 5.5).
@@ -115,10 +124,9 @@ def classify(
                 )
         return result
 
-    ov = reg.override(server, tool)
+    ov = _strictest_override(reg, server, tool, args)
     if ov is not None:  # a deployment classifying a tool the open registry doesn't cover
-        ov_entry, reason = ov
-        ov_class, ov_rationale, ov_rule = _evaluate(ov_entry, args)
+        ov_entry, reason, (ov_class, ov_rationale, ov_rule) = ov
         cap = ov_entry.raw.get("preimage")
         return Classification(
             ov_class, "override", f"{ov_rationale} (override: {reason})", server, tool, ov_rule,

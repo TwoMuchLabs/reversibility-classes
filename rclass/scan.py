@@ -443,16 +443,25 @@ def run_target(command: str | None, args: list[str], env: Mapping[str, str] | No
     return None, None
 
 
-def _package_index(registry: Registry) -> dict[str, str]:
-    return {_strip_version(p).lower(): rec["server"]["id"]
-            for rec in registry.records for p in rec["server"].get("packages", [])}
+def _package_index(registry: Registry) -> dict[str, set[str]]:
+    index: dict[str, set[str]] = {}
+    for rec in registry.records:
+        for p in rec["server"].get("packages", []):
+            index.setdefault(_strip_version(p).lower(), set()).add(rec["server"]["id"])
+    return index
 
 
 def identify_by_package(cfg: ServerConfig, registry: Registry) -> tuple[str | None, str | None]:
+    """The record whose `server.packages` lists what this config runs. If records with different ids
+    claim the same package, the server is unrecognised: an added record must extend a public one under
+    the same `server.id` (SPEC 5.4, highest class wins), never replace it under another name."""
     target, note = run_target(cfg.command, cfg.args, cfg.env, cfg.project_root)
     if not target:
         return None, note
-    return _package_index(registry).get(_strip_version(target).lower()), note
+    sids = _package_index(registry).get(_strip_version(target).lower(), set())
+    if len(sids) > 1:
+        return None, f"claimed by several records ({', '.join(sorted(sids))}); extend one under its own server.id"
+    return (next(iter(sids)) if sids else None), note
 
 
 def identify_by_endpoint(cfg: ServerConfig, registry: Registry) -> tuple[str | None, bool]:
