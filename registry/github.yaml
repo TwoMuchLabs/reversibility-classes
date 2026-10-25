@@ -1,6 +1,6 @@
 # Reversibility Classes — GitHub (official MCP server)
 # Tool names verified against the evidence URLs below. Classes are drafts until reviewed.
-spec_version: '0.2'
+spec_version: '0.3'
 server:
   id: github
   name: GitHub (official MCP server)
@@ -9,6 +9,7 @@ server:
   - https://raw.githubusercontent.com/github/github-mcp-server/main/README.md
   - https://github.com/github/github-mcp-server/blob/b98d115bbb080e9555466a96656ec4df605aea21/pkg/github/pullrequests.go
   version: github/github-mcp-server@b98d115b
+  min_version: 2.0.3
   status: active
   notes: Covers the 96 tools in the README's generated Tools section, including 4 remote-server-only tools;
     39 further tools gated behind feature flags or insiders/granular mode are not classified here and

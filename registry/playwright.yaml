@@ -1,6 +1,6 @@
 # Reversibility Classes — Playwright MCP (Microsoft)
 # Tool names verified against the evidence URLs below. Classes are drafts until reviewed.
-spec_version: '0.2'
+spec_version: '0.3'
 server:
   id: playwright
   name: Playwright MCP (Microsoft)
@@ -88,6 +88,7 @@ tools:
 - name: browser_navigate
   class: R0
   rationale: Navigation only; loads and reads a page.
+  egress: true
   review: draft
 - name: browser_navigate_back
   class: R0
@@ -165,6 +166,7 @@ tools:
   class: R3
   rationale: Closing a tab discards its sessionStorage and unsaved page state with no copy returned, and
     reopening the URL loads a fresh page that can need a fresh sign-in by a human.
+  egress: true
   when:
   - arg: action
     in:

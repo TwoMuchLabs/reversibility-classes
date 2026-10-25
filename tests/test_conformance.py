@@ -31,6 +31,8 @@ def test_case(case):
         registry=_registry(case),
         annotations=call.get("annotations"),
         trusted_server=call.get("trusted_server", False),
+        server_version=call.get("deployed_version"),
+        version_pinned=call.get("version_pinned", False),
     )
     assert str(c.rclass) == expect["class"], case["description"]
     assert c.source == expect["source"], case["description"]

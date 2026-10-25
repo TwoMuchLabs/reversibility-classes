@@ -1,6 +1,6 @@
 # Reversibility Classes — Sentry (official MCP server)
 # Tool names verified against the evidence URLs below. Classes are drafts until reviewed.
-spec_version: '0.2'
+spec_version: '0.3'
 server:
   id: sentry
   name: Sentry (official MCP server)
@@ -76,6 +76,7 @@ tools:
   class: R4
   rationale: Configures Sentry to send repeated HTTP requests with any method, headers and body to any
     URL, which can change state on or transmit data to the target.
+  egress: true
   when:
   - all:
     - arg: method
@@ -499,6 +500,7 @@ tools:
   class: R4
   rationale: Can change the check to send repeated requests with any method, headers and body to any URL,
     which can change state on or transmit data to the target.
+  egress: true
   when:
   - all:
     - arg: method

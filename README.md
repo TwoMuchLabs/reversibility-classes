@@ -80,7 +80,7 @@ rclass: R4 Irreversible (registry). Accepts any non-SELECT statement: UPDATE, DE
 prior values, and even INSERT can be an upsert (…) that overwrites rows. Needs your approval.
 ```
 
-By default R0–R1 calls get no decision (your own permission rules apply) and R2–R4 always ask. `--allow-up-to R1` lets low classes run without a prompt and `--deny-from R4` blocks instead of asking. Every decision is logged to `~/.local/state/rclass/audit.jsonl` with its class, rule and the session's effective class, never the arguments (`--log FILE` to move it, `--no-log` to stop). Servers are identified from what your Claude Code config runs, as in `rclass scan --list`, using Claude Code's project folder rather than wherever the agent has moved to. An unrecognised server or tool is R4, and so is a server whose config changes during a session. `--map NAME=RECORD` vouches for a server in your own user config; a repository's `.mcp.json` cannot use it. Any error inside the hook asks rather than allowing. A hook can only make Claude Code stricter: your own deny and ask rules still apply.
+By default R0–R1 calls get no decision (your own permission rules apply) and R2–R4 always ask. After a session has read anything, a call that can carry data to a destination the agent chooses is treated as R4 (SPEC 9), so "read the credentials file, then fetch a URL with them in it" asks before the fetch. `--allow-up-to R1` lets low classes run without a prompt and `--deny-from R4` blocks instead of asking. Every decision is logged to `~/.local/state/rclass/audit.jsonl` with its class, rule and the session's effective class, never the arguments (`--log FILE` to move it, `--no-log` to stop). Servers are identified from what your Claude Code config runs, as in `rclass scan --list`, using Claude Code's project folder rather than wherever the agent has moved to. An unrecognised server or tool is R4, and so is a server whose config changes during a session. `--map NAME=RECORD` vouches for a server in your own user config; a repository's `.mcp.json` cannot use it. Any error inside the hook asks rather than allowing. A hook can only make Claude Code stricter: your own deny and ask rules still apply.
 
 **For gateways that can't see arguments, export static policy.** These use each tool's worst-case class, so they are never less strict than the hook:
 
@@ -100,12 +100,12 @@ Server names in the output are the names in your config; for Docker and agentgat
 
 Read these before relying on the hook as a control.
 
-- **One call at a time.** The hook records the session's effective class but does not yet stop a chain like "read a secret, then fetch a URL that carries it", where each call alone is R0. A session guard for that is in progress.
+- **The session guard is coarse.** Once a session has used any tool, a call that sends data to a destination the agent chooses (`fetch`, browser navigation, Claude Code's `WebFetch`) is R4 and asks, because it could carry what the session read. List hosts you trust with `--egress-allow docs.python.org` (subdomains included). It does not see data leaving through a shell command such as `curl`, which Claude Code's own rules govern.
 - **It runs on the developer's machine.** An agent that can write anywhere on disk can edit the settings that load the hook, or delete its session state. Use it to catch mistakes, not as a boundary against a compromised agent; for that, enforce at a gateway the agent cannot reach.
 - **If Claude Code cannot start the hook at all**, or it times out, Claude Code runs the call under your normal permission rules. The generated settings run a fixed interpreter (`python -m rclass`) with a timeout to make that unlikely. If you need a floor that holds even then, add `--format claude-settings` through managed settings; it asks for every tool whose worst case is R2 or above, so it prompts more than the hook.
-- **Records are checked against one version of each server** (`server.version`) and currently apply to every version. A rule that depended on a server's default was removed for that reason; version ranges are coming.
+- **Records are checked against one release of each server.** A record can say which release with `server.min_version`; if your config pins an older release, or one whose version can't be read, the rules that lower a class are ignored and you get the stricter base class. Only the GitHub record sets it so far.
 - **Your own servers are unrecognised** (R4, so every call asks) until you add records for them with `--registry`, or vouch for one with `--map`.
-- **Only MCP tools.** Shell commands, file edits and web fetches built into the client are left to its own rules.
+- **MCP tools, plus `WebFetch` after a read.** The hook sees every tool so the session guard knows when data has been read, but it only decides MCP calls and `WebFetch`; other built-in tools are left to Claude Code's rules. It adds about 0.1 s to each built-in tool call and about 0.4 s to each MCP call.
 
 
 - **MCP's tool hints are too coarse.** `readOnlyHint` and `destructiveHint` can't say *"compensable"* or *"this is a disclosure"*, and the MCP spec tells clients to treat them as untrusted anyway. This spec maps them conservatively (section 7) and lets an independent registry say more.
@@ -188,7 +188,7 @@ Your environment can be safer than the defaults. If you keep point-in-time datab
 
 Most MCP gateways aren't written in Python. Two things make a port straightforward:
 
-- **[Conformance vectors](docs/conformance.md):** 46 classification cases and 9 invalid records in one JSON file, each tied to a section of the spec. Pass them and your implementation agrees with the spec, not just with this repository.
+- **[Conformance vectors](docs/conformance.md):** 52 classification cases and 9 invalid records in one JSON file, each tied to a section of the spec. Pass them and your implementation agrees with the spec, not just with this repository.
 - **`rclass export`** writes the whole registry as one JSON document, so another implementation can consume it without parsing YAML.
 
 ## Status and roadmap

@@ -1,6 +1,6 @@
 # Reversibility Classes — Puppeteer (archived MCP reference server)
 # Tool names verified against the evidence URLs below. Classes are drafts until reviewed.
-spec_version: '0.2'
+spec_version: '0.3'
 server:
   id: puppeteer
   name: Puppeteer (archived MCP reference server)
@@ -20,6 +20,7 @@ tools:
   rationale: launchOptions can set the browser executable and launcher flags that run host commands; the
     server's block-list of dangerous flags is incomplete and is bypassed by allowDangerous or the ALLOW_DANGEROUS
     environment variable.
+  egress: true
   when:
   - all:
     - arg: launchOptions

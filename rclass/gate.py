@@ -21,6 +21,7 @@ import re
 import shlex
 import sys
 from datetime import datetime, timezone
+from urllib.parse import urlsplit
 from pathlib import Path
 from typing import Any, Iterable, Mapping, TextIO
 
@@ -28,6 +29,7 @@ from . import scan as sc
 from .classify import classify
 from .model import Classification, RClass
 from .registry import Registry
+from .versions import pinned_version
 
 LABEL = {"allow": "allow", "ask": "ask", "deny": "deny", None: "no decision"}
 
@@ -41,12 +43,21 @@ class GatePolicy:
     `allow_up_to` lets low classes run without a prompt; `deny_from` blocks high classes outright.
     """
 
-    def __init__(self, allow_up_to: RClass | None = None, deny_from: RClass | None = None):
+    def __init__(self, allow_up_to: RClass | None = None, deny_from: RClass | None = None,
+                 egress_allow: Iterable[str] = ()):
+        self.egress_allow = [h.lower().lstrip(".") for h in egress_allow if h]
         if allow_up_to is not None and allow_up_to >= RClass.R2:
             raise ValueError("--allow-up-to can be R0 or R1: R2 and above need a human by default (SPEC 8)")
         if deny_from is not None and allow_up_to is not None and deny_from <= allow_up_to:
             raise ValueError("--deny-from must be above --allow-up-to")
         self.allow_up_to, self.deny_from = allow_up_to, deny_from
+
+    def host_allowed(self, host: str | None) -> bool:
+        """`--egress-allow example.com` allows example.com and its subdomains."""
+        if not host:
+            return False
+        host = host.lower().rstrip(".")
+        return any(host == h or host.endswith("." + h) for h in self.egress_allow)
 
     def decide(self, rclass: RClass) -> str | None:
         if self.deny_from is not None and rclass >= self.deny_from:
@@ -86,6 +97,10 @@ def server_records(configs: Iterable[Path], registry: Registry, cwd: Path, home:
             if cfg.disabled:
                 continue
             seen.setdefault(name, []).append([p.name, cfg.command, cfg.args, cfg.url, sorted(cfg.env.items())])
+            version, pinned = (None, False)
+            if not cfg.remote and not cfg.config_error:
+                target, _ = sc.run_target(cfg.command, cfg.args, cfg.env, cfg.project_root)
+                version, pinned = pinned_version(target)
             if name in mapped and not cfg.project and not cfg.config_error:
                 sid = mapped[name]
             elif cfg.config_error:
@@ -94,7 +109,7 @@ def server_records(configs: Iterable[Path], registry: Registry, cwd: Path, home:
                 sid, _ = sc.identify_by_endpoint(cfg, registry)
             else:
                 sid, _ = sc.identify_by_package(cfg, registry)
-            out.setdefault(name, []).append(sid)
+            out.setdefault(name, []).append((sid, version, pinned) if sid else None)
     if fingerprints is not None:
         for name, entries in seen.items():
             fingerprints[name] = hashlib.sha256(json.dumps(entries, sort_keys=True).encode()).hexdigest()[:16]
@@ -154,6 +169,13 @@ class SessionState:
                 records[name] = [None]
         return changed
 
+    @property
+    def has_read(self) -> bool:
+        return bool(self.data.get("read"))
+
+    def mark_read(self) -> None:
+        self.data["read"] = True
+
     def raise_to(self, rclass: RClass) -> RClass:
         prev = self.data.get("effective")
         eff = max(rclass, RClass.parse(prev)) if prev else rclass
@@ -195,10 +217,18 @@ def parse_mcp_tool(tool_name: str, known: Iterable[str] = ()) -> tuple[str, str]
     return server, tool
 
 
+def _ident(c):
+    """A candidate is a record id, or (record id, deployed version, pinned); None is unrecognised."""
+    if c is None:
+        return None
+    return (c, None, False) if isinstance(c, str) else tuple(c)
+
+
 def classify_call(server_name: str, tool: str, args: Mapping[str, Any] | None,
-                  records: Mapping[str, list[str | None]], registry: Registry,
+                  records: Mapping[str, list], registry: Registry,
                   changed: set[str] = frozenset()) -> Classification:
-    """The strictest class across every record this server name could be. Unrecognised means R4."""
+    """The strictest class across every record this server name could be. Unrecognised means R4.
+    A deployment pinned to a release older than a record's `min_version` gets no class-lowering rules."""
     candidates = records.get(server_name)
     if not candidates or any(c is None for c in candidates):
         why = ("its config changed during this session" if server_name in changed
@@ -206,7 +236,10 @@ def classify_call(server_name: str, tool: str, args: Mapping[str, Any] | None,
                else "its config does not run a registry server as itself")
         return Classification(RClass.R4, "fail-closed",
                               f"Server '{server_name}' is unrecognised ({why}); failing closed.", server_name, tool)
-    results = [classify(sid, tool, args, registry=registry).unconfirmed() for sid in dict.fromkeys(candidates)]
+    results = []
+    for sid, version, pinned in dict.fromkeys(_ident(c) for c in candidates):
+        results.append(classify(sid, tool, args, registry=registry, server_version=version,
+                                version_pinned=pinned).unconfirmed())
     return max(results, key=lambda c: c.rclass)
 
 
@@ -228,6 +261,45 @@ def ask_on_error(stdout: TextIO, what: str) -> int:
     return 0
 
 
+# Claude Code's own tools that send caller-chosen data to a caller-chosen place. Search tools send queries
+# only to their provider, which is not a channel an attacker can read, so they are not egress.
+BUILTIN_EGRESS = {"WebFetch"}
+URL_KEYS = ("url", "uri", "href", "link", "endpoint")
+
+
+def destination_host(args: Mapping[str, Any] | None) -> str | None:
+    for k in URL_KEYS:
+        v = (args or {}).get(k)
+        if isinstance(v, str) and v:
+            try:
+                return urlsplit(v if "//" in v else "//" + v).hostname
+            except ValueError:
+                return None
+    return None
+
+
+def session_guard(c: Classification, egress: bool, args: Mapping[str, Any] | None, state: "SessionState",
+                  policy: GatePolicy) -> Classification:
+    """SPEC 9: a call that can carry data to a destination the agent chooses is R4 once the session has read
+    anything, unless the destination is allow-listed. Any other call counts as a read."""
+    if not egress:
+        state.mark_read()
+        return c
+    host = destination_host(args)
+    if state.has_read and not policy.host_allowed(host) and c.rclass < RClass.R4:
+        where = f" ({host})" if host else ""
+        return Classification(RClass.R4, "session", "Sends data to a destination the agent chooses" + where +
+                              ", after this session has read data, so it could carry that data out (SPEC 9). "
+                              "Allow trusted hosts with --egress-allow.", c.server, c.tool)
+    return c
+
+
+def _emit(stdout: TextIO, decision: str, reason: str) -> None:
+    json.dump({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": decision,
+                                      "permissionDecisionReason": reason}}, stdout)
+    stdout.write("\n")
+
+
 def run_hook(stdin: TextIO, stdout: TextIO, policy: GatePolicy, registry_factory,
              mapping: Mapping[str, str] | None = None, log_path: Path | None = None,
              home: Path | None = None, state_root: Path | None = None) -> int:
@@ -235,10 +307,21 @@ def run_hook(stdin: TextIO, stdout: TextIO, policy: GatePolicy, registry_factory
     try:
         event = json.load(stdin)
         tool_name = str(event.get("tool_name", ""))
-        if not tool_name.startswith("mcp__"):
-            return 0  # not an MCP tool: no decision, the client's normal rules apply
         args = event.get("tool_input")
         args = args if isinstance(args, Mapping) else None
+        if not tool_name.startswith("mcp__"):
+            # Claude Code's own tools: no class, but they count for the session guard. No registry is loaded.
+            state = SessionState(event.get("session_id"), state_root)
+            c = session_guard(Classification(RClass.R0, "builtin", "", "claude-code", tool_name),
+                              tool_name in BUILTIN_EGRESS, args, state, policy)
+            state.save()
+            if c.source == "session":
+                decision = policy.decide(c.rclass)
+                if log_path is not None:
+                    _log(log_path, event, "claude-code", tool_name, c, decision, state.raise_to(c.rclass))
+                    state.save()
+                _emit(stdout, decision or "ask", _reason(c, "claude-code", decision or "ask"))
+            return 0
         cwd = project_dir(event)
         home = home or Path.home()
         registry = registry_factory()
@@ -251,6 +334,9 @@ def run_hook(stdin: TextIO, stdout: TextIO, policy: GatePolicy, registry_factory
             raise ValueError("malformed MCP tool name")
         server_name, tool = parsed
         c = classify_call(server_name, tool, args, records, registry, changed)
+        sids = [_ident(x)[0] for x in records.get(server_name) or [] if x]
+        egress = any(e.raw.get("egress") for sid in sids for e in registry.entries(sid, tool))
+        c = session_guard(c, egress, args, state, policy)
         decision = policy.decide(c.rclass)
         effective = state.raise_to(c.rclass)
         state.save()
@@ -258,12 +344,13 @@ def run_hook(stdin: TextIO, stdout: TextIO, policy: GatePolicy, registry_factory
             _log(log_path, event, server_name, tool, c, decision, effective)
         if decision is None:
             return 0
-        json.dump({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": decision,
-                                          "permissionDecisionReason": _reason(c, server_name, decision)}}, stdout)
-        stdout.write("\n")
+        _emit(stdout, decision, _reason(c, server_name, decision))
         return 0
     except Exception as exc:  # noqa: BLE001 - the one thing a gate must not do is fail open
-        return ask_on_error(stdout, exc.__class__.__name__)
+        what = exc.__class__.__name__
+        if exc.__class__.__name__ == "UsageError":
+            what = f"rclass hook is misconfigured: {exc}"
+        return ask_on_error(stdout, what)
 
 
 def _log(path: Path, event: Mapping[str, Any], server: str, tool: str, c: Classification, decision: str | None,
@@ -386,7 +473,9 @@ def claude_hook_settings(extra_args: list[str], python: str | None = None) -> st
     """Hook settings that run this exact interpreter (`python -m rclass`), not whatever `rclass` is on PATH:
     an IDE, terminal or container with a different PATH would otherwise run no hook at all."""
     command = " ".join(shlex.quote(a) for a in [python or sys.executable, "-m", "rclass", "hook", "claude-code", *extra_args])
-    return json.dumps({"hooks": {"PreToolUse": [{"matcher": "mcp__.*",
+    # Every tool, not only MCP ones: the session guard must see Read, Bash and the like to know the session
+    # has read data. Non-MCP calls get no decision, except WebFetch after a read.
+    return json.dumps({"hooks": {"PreToolUse": [{"matcher": ".*",
                                                  "hooks": [{"type": "command", "command": command, "timeout": 30}]}]}},
                       indent=2) + "\n"
 
