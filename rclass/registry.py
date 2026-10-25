@@ -71,10 +71,24 @@ def _has_version(pkg: str) -> bool:
 
 
 def read_record_file(path: Path) -> dict:
-    text = path.read_text(encoding="utf-8")
-    if path.suffix in (".yaml", ".yml"):
-        return yaml.safe_load(text)
-    return json.loads(text)
+    """Read one record file. Every way this can fail raises RecordError with a one-line reason."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        raise RecordError(f"{path}: file not found") from None
+    except (OSError, UnicodeDecodeError) as exc:
+        raise RecordError(f"{path}: could not read ({exc.__class__.__name__})") from None
+    try:
+        data = yaml.safe_load(text) if path.suffix in (".yaml", ".yml") else json.loads(text)
+    except yaml.YAMLError as exc:
+        mark = getattr(exc, "problem_mark", None)
+        where = f" at line {mark.line + 1}" if mark else ""
+        raise RecordError(f"{path}: not valid YAML{where}") from None
+    except json.JSONDecodeError as exc:
+        raise RecordError(f"{path}: not valid JSON at line {exc.lineno}") from None
+    if not isinstance(data, dict):
+        raise RecordError(f"{path}: a record must be a mapping with spec_version, server and tools")
+    return data
 
 
 @dataclass
@@ -135,14 +149,19 @@ class Registry:
                     reg.add(read_record_file(f), str(f))
         return reg
 
-    @classmethod
-    def bundled(cls) -> "Registry":
-        """The open registry shipped in this repository's registry/ folder."""
+    @staticmethod
+    def bundled_path() -> Path:
+        """Where the open registry is: inside the installed package, or the repository's registry/ folder."""
         here = Path(__file__).resolve().parent
         for candidate in (here / "registry", here.parent / "registry"):
             if candidate.is_dir():
-                return cls.from_paths([candidate])
+                return candidate
         raise FileNotFoundError("bundled registry not found")
+
+    @classmethod
+    def bundled(cls) -> "Registry":
+        """The open registry shipped with rclass."""
+        return cls.from_paths([cls.bundled_path()])
 
     # -- lookup ----------------------------------------------------------
     def entries(self, server: str, tool: str) -> list[ToolEntry]:
@@ -160,6 +179,9 @@ class Registry:
 
     def servers(self) -> list[str]:
         return sorted({r["server"]["id"] for r in self.records})
+
+    def tools_of(self, server: str) -> list[str]:
+        return sorted({t for (s, t) in self._tools if s == server})
 
     def all_entries(self) -> list[ToolEntry]:
         return [e for group in self._tools.values() for e in group]

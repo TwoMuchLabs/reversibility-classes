@@ -116,7 +116,7 @@ A few classifications worth arguing about:
 - `postgres/query` is **R4** unless the query is a single `SELECT`. The server wraps every query in a read-only transaction, but a query that starts with `COMMIT;` escapes it ([reported by Datadog Security Labs](https://securitylabs.datadoghq.com/articles/mcp-vulnerability-case-study-SQL-injection-in-the-postgresql-mcp-server/) in 2025).
 - Every Playwright tool that accepts a `filename` is **R4** when one is given: an explicit filename is resolved against your workspace root, so it can overwrite your own files.
 
-The registry has had one independent audit; the fixes are applied, and the [open questions](docs/open-classification-questions.md) it raised are waiting for opinions. Disagree with a class? [Open a classification dispute](../../issues/new?template=classification-dispute.yml). That is the point.
+The registry has had one independent audit; the fixes are applied, and the [open questions](docs/open-classification-questions.md) it raised are waiting for opinions. Disagree with a class? [Open a classification dispute](https://github.com/TwoMuchLabs/reversibility-classes/issues/new?template=classification-dispute.yml). That is the point.
 
 ## Use it in your own code
 
@@ -152,7 +152,7 @@ Most MCP gateways aren't written in Python. Two things make a port straightforwa
 
 ## Status and roadmap
 
-v0.2 is a draft for comment. It defines *restorable* precisely and adds pre-image capture; see the [changelog](CHANGELOG.md). Open questions for v0.3 include a **detection window** (how long a mistake usually goes unnoticed), **pattern rules** for sequences of actions that are harmless alone but not together, and whether a reversibility hint belongs in MCP itself. See [SPEC section 12](SPEC.md#12-open-questions-for-v03).
+The specification is v0.2.1, a draft for comment; `rclass` 0.3 implements it and adds `rclass scan` (the tool and the spec are versioned separately). See the [changelog](CHANGELOG.md). Open questions for v0.3 include a **detection window** (how long a mistake usually goes unnoticed), **pattern rules** for sequences of actions that are harmless alone but not together, and whether a reversibility hint belongs in MCP itself. See [SPEC section 12](SPEC.md#12-open-questions-for-v03).
 
 ## License
 

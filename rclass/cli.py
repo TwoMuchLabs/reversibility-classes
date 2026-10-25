@@ -31,6 +31,8 @@ def _registry(paths: list[str] | None, overrides: list[str] | None = None, exten
         for rec in extra.records:
             reg.add(rec, p)
     for p in overrides or []:
+        if not Path(p).exists():
+            raise UsageError(f"--override file not found: {p}")
         rec = read_record_file(Path(p))
         reason = (rec.get("server") or {}).get("notes")
         if not reason:
@@ -45,8 +47,13 @@ def cmd_lookup(ns: argparse.Namespace) -> int:
     except json.JSONDecodeError as exc:
         print(f"--args is not valid JSON: {exc}", file=sys.stderr)
         return 2
-    c = classify(ns.server, ns.tool, args, registry=_registry(ns.registry, ns.override))
+    reg = _registry(ns.registry, ns.override)
+    c = classify(ns.server, ns.tool, args, registry=reg)
     out = c.to_dict() | {"default_policy": DEFAULT_POLICY[c.rclass].value}
+    if c.source == "fail-closed":
+        note = _unknown_hint(reg, ns.server, ns.tool)
+        if note:
+            print(f"note: {note}", file=sys.stderr)
     if ns.json:
         print(json.dumps(out, indent=2))
     else:
@@ -56,11 +63,35 @@ def cmd_lookup(ns: argparse.Namespace) -> int:
     return 0
 
 
+def _unknown_hint(reg: Registry, server: str, tool: str) -> str | None:
+    """Why a lookup failed closed, when the likely cause is a typo. The class stays R4 either way."""
+    import difflib
+    servers = reg.servers()
+    if server not in servers:
+        close = difflib.get_close_matches(server, servers, n=3, cutoff=0.6)
+        hint = f"no record for server '{server}'"
+        return hint + (f"; did you mean {', '.join(close)}?" if close else "; `rclass stats` lists the servers the registry covers")
+    tools = reg.tools_of(server)
+    close = difflib.get_close_matches(tool, tools, n=3, cutoff=0.5)
+    hint = f"server '{server}' has no tool '{tool}' in the registry"
+    return hint + (f"; did you mean {', '.join(close)}?" if close else "")
+
+
 def cmd_validate(ns: argparse.Namespace) -> int:
-    targets = [Path(p) for p in (ns.paths or ["registry"])]
+    if ns.paths:
+        targets = [Path(p) for p in ns.paths]
+    elif Path("registry").is_dir():
+        targets = [Path("registry")]
+    else:
+        targets = [Registry.bundled_path()]
+        print(f"validating the bundled registry ({targets[0]})", file=sys.stderr)
     files = []
     for t in targets:
-        files += sorted(f for f in t.rglob("*") if f.suffix in (".yaml", ".yml", ".json")) if t.is_dir() else [t]
+        if not t.exists():
+            raise UsageError(f"path not found: {t}")
+        files += sorted(f for f in t.rglob("*") if f.suffix in (".yaml", ".yml", ".json") and f.is_file()) if t.is_dir() else [t]
+    if not files:
+        raise UsageError(f"no record files (.yaml, .yml, .json) found in {', '.join(map(str, targets))}")
     failed = 0
     for f in files:
         try:
@@ -288,7 +319,7 @@ def main(argv: list[str] | None = None) -> int:
     ns = p.parse_args(argv)
     try:
         return ns.fn(ns)
-    except UsageError as exc:
+    except (UsageError, RecordError) as exc:
         print(exc, file=sys.stderr)
         return 2
 

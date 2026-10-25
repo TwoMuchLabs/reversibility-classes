@@ -240,6 +240,9 @@ def load_config(path: Path, cwd: Path | None = None, home: Path | None = None,
     home = home or Path.home()
     try:
         doc = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        # Position only, never the text around it: a config can hold secrets.
+        raise ValueError(f"could not read {path}: not valid JSON (line {exc.lineno}, column {exc.colno})") from None
     except (OSError, ValueError, RecursionError) as exc:
         raise ValueError(f"could not read {path}: {exc.__class__.__name__}") from None
     if not isinstance(doc, Mapping):
