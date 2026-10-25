@@ -38,6 +38,9 @@ def validate_record(record: dict, origin: str = "<record>") -> None:
         for err in sorted(_VALIDATOR.iter_errors(record), key=lambda e: list(e.absolute_path))
     ]
     if not problems:
+        for pkg in record["server"].get("packages", []):
+            if _has_version(pkg):
+                problems.append(f"server/packages: {pkg!r} carries a version; list the bare package or image name")
         seen: set[str] = set()
         for tool in record["tools"]:
             if tool["name"] in seen:
@@ -54,6 +57,17 @@ def validate_record(record: dict, origin: str = "<record>") -> None:
                     problems.append(f"tools/{tool['name']}: preimage cannot apply to a disclosure; capturing state does not un-disclose it")
     if problems:
         raise RecordError(f"{origin}:\n  " + "\n  ".join(problems))
+
+
+def _has_version(pkg: str) -> bool:
+    """True for "pkg@1.2", "@scope/pkg@1.2", "pkg==1.2" or "image:tag" (but not "host:port/image")."""
+    if "==" in pkg:
+        return True
+    name = pkg[1:] if pkg.startswith("@") else pkg
+    if "@" in name:
+        return True
+    last = pkg.rsplit("/", 1)[-1]
+    return ":" in last
 
 
 def read_record_file(path: Path) -> dict:

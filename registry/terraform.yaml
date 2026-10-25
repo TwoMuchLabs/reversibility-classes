@@ -16,6 +16,8 @@ server:
     delete_workspace_safely and force_unlock_workspace, and lets create_run accept run_type auto_approve
     and is_destroy; classes assume it is on. is_destroy and auto_approve are run_type values, not separate
     arguments. There is no read-only flag beyond leaving the terraform toolset off.
+  packages:
+  - 'hashicorp/terraform-mcp-server'
 tools:
 - name: search_provider_docs
   class: R0

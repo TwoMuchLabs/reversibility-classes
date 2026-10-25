@@ -12,6 +12,8 @@ server:
   status: active
   notes: The README names the tool sequential_thinking; the server registers it as sequentialthinking.
     This record uses the registered name.
+  packages:
+  - '@modelcontextprotocol/server-sequential-thinking'
 tools:
 - name: sequentialthinking
   class: R0

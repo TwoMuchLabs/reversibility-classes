@@ -12,6 +12,8 @@ server:
   status: archived
   notes: Archived. The README names describe-table; the server registers describe_table. write_query accepts
     any statement not starting with SELECT.
+  packages:
+  - 'mcp-server-sqlite'
 tools:
 - name: read_query
   class: R0

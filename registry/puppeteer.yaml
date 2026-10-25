@@ -12,6 +12,8 @@ server:
   status: archived
   notes: Archived. What a click, keystroke or script does depends entirely on the page. Deployments that
     restrict the browser to allow-listed sites can override.
+  packages:
+  - '@modelcontextprotocol/server-puppeteer'
 tools:
 - name: puppeteer_navigate
   class: R4

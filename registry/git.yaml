@@ -11,6 +11,8 @@ server:
   version: modelcontextprotocol/servers@51b6382a
   status: active
   notes: The server has no push, fetch or remote tools, so every effect stays in the local repository.
+  packages:
+  - 'mcp-server-git'
 tools:
 - name: git_status
   class: R0

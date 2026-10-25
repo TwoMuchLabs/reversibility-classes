@@ -10,6 +10,8 @@ server:
   - https://raw.githubusercontent.com/modelcontextprotocol/servers/main/src/time/src/mcp_server_time/server.py
   version: modelcontextprotocol/servers@51b6382a
   status: active
+  packages:
+  - 'mcp-server-time'
 tools:
 - name: get_current_time
   class: R0

@@ -20,6 +20,8 @@ server:
     overwrite tools to R3. Content written under a page that is shared to the web becomes public. The
     vendor says this server is no longer actively maintained; the hosted Remote Notion MCP has a different
     tool set and is not covered.
+  packages:
+  - '@notionhq/notion-mcp-server'
 tools:
 - name: API-get-user
   class: R0

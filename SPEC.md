@@ -91,6 +91,8 @@ A **classification record** assigns classes to the tools of one tool server. Rec
 | `server.version` | no | Version, tag or commit the record was verified against. |
 | `server.status` | no | `active` or `archived`. |
 | `server.notes` | no | Anything a reviewer should know, e.g. a read-only mode the server enforces. |
+| `server.packages` | no | How people install the server, without versions: npm or PyPI package names, or container images (e.g. `@modelcontextprotocol/server-filesystem`, `mcp-server-git`, `ghcr.io/github/github-mcp-server`). Lets tools recognise the server in a client's configuration. |
+| `server.endpoints` | no | URLs of hosted deployments that expose the same tool set (e.g. `https://mcp.stripe.com`). |
 | `default_class` | no | Class for tools of this server not listed in `tools`. If absent, the fail-closed rule (Section 6) applies. |
 | `tools` | yes | List of tool entries. |
 
