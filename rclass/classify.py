@@ -83,14 +83,46 @@ def from_mcp_annotations(annotations: Mapping[str, Any] | None) -> RClass:
     return RClass.R3 if destructive else RClass.R1
 
 
-def _strictest_override(reg: Registry, server: str, tool: str, args):
-    """When several overrides cover a tool, the one giving this call the highest class applies (SPEC 5.4)."""
+GOVERNANCE_FIELDS = ("owner", "approved_by", "expires")
+
+
+def override_status(meta: Mapping[str, Any] | None, environment: str | None, today: str | None,
+                    governed: bool) -> tuple[bool, bool, str | None]:
+    """(applies, may_lower, why_not) for one override in this deployment (SPEC 5.5).
+
+    - An override scoped to `server.environments` applies only where the deployment declares one of them.
+    - An expired override (`server.expires` before today) may still raise a class but never lower one.
+    - With `governed`, an override missing an owner, an approver or an expiry may only raise.
+    """
+    meta = meta or {}
+    envs = meta.get("environments")
+    if envs and environment not in envs:
+        return False, False, "scoped to other environments"
+    expires = meta.get("expires")
+    if expires and today and str(expires) < today:
+        return True, False, f"expired on {expires}"
+    if governed and not all(meta.get(k) for k in GOVERNANCE_FIELDS):
+        return True, False, "missing owner, approved_by or expires"
+    return True, True, None
+
+
+def _strictest_override(reg: Registry, server: str, tool: str, args, environment=None, today=None, governed=False):
+    """When several overrides cover a tool, the one giving this call the highest class applies (SPEC 5.5).
+    Returns (entry, reason, evaluation, may_lower)."""
     best = None
     for entry, reason in reg.overrides(server, tool):
+        applies, may_lower, _ = override_status(entry.meta, environment, today, governed)
+        if not applies:
+            continue
         ev = _evaluate(entry, args)
         if best is None or ev[0] > best[2][0]:
-            best = (entry, reason, ev)
+            best = (entry, reason, ev, may_lower)
     return best
+
+
+def _override_meta(entry: ToolEntry, reason: str) -> dict[str, Any]:
+    m = entry.meta or {}
+    return {"reason": reason, **{k: m.get(k) for k in (*GOVERNANCE_FIELDS, "environments") if m.get(k)}}
 
 
 def classify(
@@ -103,6 +135,9 @@ def classify(
     trusted_server: bool = False,
     server_version: str | None = None,
     version_pinned: bool = False,
+    environment: str | None = None,
+    today: str | None = None,
+    governed_overrides: bool = False,
 ) -> Classification:
     """Classify one tool call.
 
@@ -112,6 +147,11 @@ def classify(
     """
     reg = registry if registry is not None else _default_registry()
     entries = reg.entries(server, tool)
+    environment = environment if environment is not None else reg.environment
+    governed_overrides = governed_overrides or reg.governed
+    if today is None:  # expiry is enforced unless a caller pins the date (conformance vectors do)
+        from datetime import datetime, timezone
+        today = datetime.now(timezone.utc).date().isoformat()
 
     if entries:
         results = [(_evaluate(e, args, rules_apply(e.min_version, server_version, version_pinned)), e)
@@ -120,30 +160,34 @@ def classify(
         source = "rule" if rule_index is not None else "registry"
         result = Classification(rclass, source, rationale, server, tool, rule_index)
 
-        ov = _strictest_override(reg, server, tool, args)
+        ov = _strictest_override(reg, server, tool, args, environment, today, governed_overrides)
         if ov is not None:
-            ov_entry, reason, (ov_class, ov_rationale, ov_rule) = ov
+            ov_entry, reason, (ov_class, ov_rationale, ov_rule), may_lower = ov
             disclosure = any(e.disclosure for e in entries)
             # A disclosure tool may be lowered only when the override explicitly asserts
             # that, in this deployment, it reaches no one outside the principal (SPEC 5.5).
             asserts_private = ov_entry.raw.get("disclosure") is False
-            if ov_class > rclass or (ov_class < rclass and (not disclosure or asserts_private)):
+            if ov_class > rclass or (ov_class < rclass and may_lower and (not disclosure or asserts_private)):
                 lowered_by_capture = ov_class < rclass and "preimage" in ov_entry.raw
                 result = Classification(
                     ov_class, "override", f"{ov_rationale} (override: {reason})", server, tool, ov_rule,
                     preimage=ov_entry.raw["preimage"] if lowered_by_capture else None,
                     fallback=rclass if lowered_by_capture else None,
+                    override=_override_meta(ov_entry, reason),
                 )
         return result
 
-    ov = _strictest_override(reg, server, tool, args)
+    ov = _strictest_override(reg, server, tool, args, environment, today, governed_overrides)
     if ov is not None:  # a deployment classifying a tool the open registry doesn't cover
-        ov_entry, reason, (ov_class, ov_rationale, ov_rule) = ov
-        cap = ov_entry.raw.get("preimage")
-        return Classification(
-            ov_class, "override", f"{ov_rationale} (override: {reason})", server, tool, ov_rule,
-            preimage=cap, fallback=RClass.R4 if cap else None,  # unconfirmed capture fails closed
-        )
+        ov_entry, reason, (ov_class, ov_rationale, ov_rule), may_lower = ov
+        # Without a record the tool would fail closed at R4, so an override that may not lower is ignored.
+        if may_lower or ov_class >= RClass.R4:
+            cap = ov_entry.raw.get("preimage")
+            return Classification(
+                ov_class, "override", f"{ov_rationale} (override: {reason})", server, tool, ov_rule,
+                preimage=cap, fallback=RClass.R4 if cap else None,  # unconfirmed capture fails closed
+                override=_override_meta(ov_entry, reason),
+            )
 
     default = reg.default_for(server)
     if default is not None:

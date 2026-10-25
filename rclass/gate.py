@@ -493,6 +493,8 @@ def _log(path: Path, event: Mapping[str, Any], server: str, tool: str, c: Classi
              "args_sha256": audit.args_digest(args if isinstance(args, Mapping) else None)}
     if c.source == "override":
         entry["rationale"] = c.rationale  # carries the override's logged reason (SPEC 5.5)
+        if c.override:
+            entry["override"] = dict(c.override)  # reason, owner, approved_by, expires, environments
     audit.append(path, entry)
 
 

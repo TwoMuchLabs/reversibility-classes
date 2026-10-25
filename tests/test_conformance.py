@@ -33,6 +33,9 @@ def test_case(case):
         trusted_server=call.get("trusted_server", False),
         server_version=call.get("deployed_version"),
         version_pinned=call.get("version_pinned", False),
+        environment=call.get("environment"),
+        today=call.get("today", "2026-06-01"),
+        governed_overrides=call.get("governed_overrides", False),
     )
     assert str(c.rclass) == expect["class"], case["description"]
     assert c.source == expect["source"], case["description"]

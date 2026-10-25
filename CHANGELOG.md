@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.7.0 — 2026-11-01
+
+**Specification 0.4.0: governed overrides.**
+
+- **Overrides say whose decision they are** (SPEC 5.5): `owner`, `approved_by`, `expires` and `environments` in an override's `server` fields.
+  - After `expires`, an override may still raise a class but can no longer lower one.
+  - An override with `environments` applies only where the deployment declares one of them (`--environment NAME`); a deployment that declares none gets no scoped overrides.
+  - `--governed-overrides` makes an override missing an owner, an approver or an expiry raise-only.
+- **Logged with every decision** an override affects: its reason, owner, approver, expiry and environments.
+- Applies to `lookup`, `scan`, `hook` and `policy`. `rclass policy --format claude-hook` carries `--environment`, `--governed-overrides`, `--registry` and `--override` (as absolute paths) into the hook command.
+- Eight new conformance cases (60 in all). Records targeting 0.1–0.3 remain valid.
+
+**Install:** `pip install git+https://github.com/TwoMuchLabs/reversibility-classes@v0.7.0`
+
 ## v0.6.0 — 2026-10-25
 
 **An audit log an auditor can use.**

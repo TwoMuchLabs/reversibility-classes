@@ -17,14 +17,23 @@ class UsageError(Exception):
     """A mistake in how rclass was called. Reported with exit code 2."""
 
 
-def _registry(paths: list[str] | None, overrides: list[str] | None = None, extend: bool = True) -> Registry:
+def _deploy(reg: Registry, ns: argparse.Namespace | None) -> Registry:
+    """Apply --environment and --governed-overrides, where a command offers them."""
+    if ns is not None:
+        reg.environment = getattr(ns, "environment", None)
+        reg.governed = bool(getattr(ns, "governed_overrides", False))
+    return reg
+
+
+def _registry(paths: list[str] | None, overrides: list[str] | None = None, extend: bool = True,
+              ns: argparse.Namespace | None = None) -> Registry:
     """The bundled registry plus any extra record paths (SPEC 5.4: the highest class across them wins).
     With extend=False, the given paths replace the bundled registry."""
     for p in paths or []:
         if not Path(p).exists():
             raise UsageError(f"--registry path not found: {p}")
     if paths and not extend:
-        return Registry.from_paths(paths)
+        return _deploy(Registry.from_paths(paths), ns)
     reg = Registry.bundled()
     for p in paths or []:
         extra = Registry.from_paths([p])
@@ -38,7 +47,7 @@ def _registry(paths: list[str] | None, overrides: list[str] | None = None, exten
         if not reason:
             raise UsageError(f"{p}: an override must say why in server.notes; it is logged with every decision (SPEC 5.5)")
         reg.add_override(rec, reason, p)
-    return reg
+    return _deploy(reg, ns)
 
 
 def cmd_lookup(ns: argparse.Namespace) -> int:
@@ -47,7 +56,7 @@ def cmd_lookup(ns: argparse.Namespace) -> int:
     except json.JSONDecodeError as exc:
         print(f"--args is not valid JSON: {exc}", file=sys.stderr)
         return 2
-    reg = _registry(ns.registry, ns.override)
+    reg = _registry(ns.registry, ns.override, ns=ns)
     c = classify(ns.server, ns.tool, args, registry=reg)
     out = c.to_dict() | {"default_policy": DEFAULT_POLICY[c.rclass].value}
     if c.source == "fail-closed":
@@ -146,7 +155,7 @@ def cmd_scan(ns: argparse.Namespace) -> int:
               ".mcp.json), Cursor, VS Code (.vscode/mcp.json) and Windsurf.\n"
               "Pass a config file explicitly: rclass scan path/to/mcp.json", file=sys.stderr)
         return EXIT_USAGE
-    registry = _registry(ns.registry, ns.override)
+    registry = _registry(ns.registry, ns.override, ns=ns)
     assume = _parse_assume(ns.assume)
     try:
         servers = sc.collect(configs, all_projects=ns.all_projects)
@@ -275,6 +284,13 @@ def _gate_args(ns: argparse.Namespace) -> list[str]:
         out += ["--allow-up-to", ns.allow_up_to]
     if ns.deny_from:
         out += ["--deny-from", ns.deny_from]
+    if getattr(ns, "environment", None):
+        out += ["--environment", ns.environment]
+    if getattr(ns, "governed_overrides", False):
+        out += ["--governed-overrides"]
+    for flag, paths in (("--registry", getattr(ns, "registry", None)), ("--override", getattr(ns, "override", None))):
+        for path in paths or []:
+            out += [flag, str(Path(path).expanduser().resolve())]  # the hook runs from another folder
     return out
 
 
@@ -293,7 +309,7 @@ def cmd_hook(ns: argparse.Namespace) -> int:
     def registry() -> Registry:
         # Loaded only for MCP calls: Claude Code's own tools pass through the hook on every call and need no
         # registry. A problem here surfaces inside run_hook, which asks with the reason.
-        reg = _registry(ns.registry, ns.override)
+        reg = _registry(ns.registry, ns.override, ns=ns)
         bad = [r for r in mapping.values() if r not in reg.servers()]
         if bad:
             raise UsageError(f"--map names {', '.join(bad)}, which {'is' if len(bad) == 1 else 'are'} not in the registry")
@@ -316,7 +332,7 @@ def cmd_policy(ns: argparse.Namespace) -> int:
         if not configs:
             raise UsageError("No MCP client configuration found. Pass a config file: rclass policy --format ... path/to/mcp.json")
         try:
-            result = gate.static_scan(configs, _registry(ns.registry, ns.override))
+            result = gate.static_scan(configs, _registry(ns.registry, ns.override, ns=ns))
         except ValueError as exc:
             raise UsageError(str(exc)) from None
         if not result.servers:
@@ -397,6 +413,10 @@ def main(argv: list[str] | None = None) -> int:
                     help="exit 1 if anything reachable is at or above CLASS (R0-R4); exit 3 if the scan is incomplete")
     sc.add_argument("--write-drafts", metavar="DIR", help="write draft records for unclassified tools, to contribute")
     sc.add_argument("--registry", action="append", help="extra registry path (repeatable)")
+    sc.add_argument("--environment", metavar="NAME",
+                    help="this deployment's environment; overrides scoped to other environments do not apply")
+    sc.add_argument("--governed-overrides", action="store_true",
+                    help="an override may lower a class only if it names an owner, approved_by and expires")
     sc.add_argument("--override", action="append", help="deployment override record (repeatable; reason in server.notes)")
     sc.set_defaults(fn=cmd_scan)
 
@@ -405,6 +425,10 @@ def main(argv: list[str] | None = None) -> int:
     lk.add_argument("tool")
     lk.add_argument("--args", help="tool arguments as JSON")
     lk.add_argument("--registry", action="append", help="registry path (repeatable); default: bundled")
+    lk.add_argument("--environment", metavar="NAME",
+                    help="this deployment's environment; overrides scoped to other environments do not apply")
+    lk.add_argument("--governed-overrides", action="store_true",
+                    help="an override may lower a class only if it names an owner, approved_by and expires")
     lk.add_argument("--override", action="append", help="deployment override record (repeatable)")
     lk.add_argument("--json", action="store_true")
     lk.set_defaults(fn=cmd_lookup)
@@ -443,6 +467,10 @@ def main(argv: list[str] | None = None) -> int:
                     "effective class, decision; never arguments). Default: ~/.local/state/rclass/audit.jsonl")
     hk.add_argument("--no-log", action="store_true", help="do not write the decision log")
     hk.add_argument("--registry", action="append", help="extra registry path (repeatable)")
+    hk.add_argument("--environment", metavar="NAME",
+                    help="this deployment's environment; overrides scoped to other environments do not apply")
+    hk.add_argument("--governed-overrides", action="store_true",
+                    help="an override may lower a class only if it names an owner, approved_by and expires")
     hk.add_argument("--override", action="append", help="deployment override record (repeatable)")
     hk.set_defaults(fn=cmd_hook)
 
@@ -470,6 +498,10 @@ def main(argv: list[str] | None = None) -> int:
                     help="with --format claude-hook: hosts the session guard lets calls send data to")
     po.add_argument("--out", help="write to this file instead of stdout")
     po.add_argument("--registry", action="append", help="extra registry path (repeatable)")
+    po.add_argument("--environment", metavar="NAME",
+                    help="this deployment's environment; overrides scoped to other environments do not apply")
+    po.add_argument("--governed-overrides", action="store_true",
+                    help="an override may lower a class only if it names an owner, approved_by and expires")
     po.add_argument("--override", action="append", help="deployment override record (repeatable)")
     po.set_defaults(fn=cmd_policy)
 

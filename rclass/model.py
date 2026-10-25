@@ -58,6 +58,9 @@ class Classification:
     # capture this state before executing; if it cannot, it must use `unconfirmed()` instead.
     preimage: Mapping[str, str] | None = None
     fallback: "RClass | None" = None
+    # Set when a deployment override decided the class: who owns and approved it, and when it expires
+    # (SPEC 5.5). Logged with every decision it affects.
+    override: Mapping[str, object] | None = None
 
     def unconfirmed(self) -> "Classification":
         """The classification to use when the required pre-image capture did not succeed."""

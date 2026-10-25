@@ -104,6 +104,7 @@ class ToolEntry:
     server: str
     raw: dict
     min_version: str | None = None  # the record's server.min_version (SPEC 5.1)
+    meta: dict | None = None  # for an override: its record's server fields (owner, expires, environments, ...)
 
     @property
     def name(self) -> str:
@@ -126,6 +127,10 @@ class Registry:
     _tools: dict[tuple[str, str], list[ToolEntry]] = field(default_factory=dict)
     _defaults: dict[str, list[RClass]] = field(default_factory=dict)
     _overrides: dict[tuple[str, str], list[tuple[ToolEntry, str]]] = field(default_factory=dict)
+    # Deployment context for overrides (SPEC 5.5): the environment this deployment declares, and whether
+    # an override must name an owner, an approver and an expiry before it may lower a class.
+    environment: str | None = None
+    governed: bool = False
 
     # -- loading ---------------------------------------------------------
     def add(self, record: dict, origin: str = "<record>") -> None:
@@ -145,7 +150,8 @@ class Registry:
         for tool in record["tools"]:
             # Several overrides for one tool (a platform layer and a team layer, say) are all kept and the
             # most restrictive applies to each call: a later file never silently replaces an earlier one.
-            self._overrides.setdefault((server, tool["name"]), []).append((ToolEntry(server, tool), reason))
+            self._overrides.setdefault((server, tool["name"]), []).append(
+                (ToolEntry(server, tool, meta=dict(record["server"])), reason))
 
     @classmethod
     def from_paths(cls, paths: Iterable[str | Path]) -> "Registry":
