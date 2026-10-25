@@ -4,7 +4,7 @@
 Starts the latest release of each server in scripts/drift_targets.json with `rclass scan`'s client,
 and compares its tools with the registry record. Writes a Markdown report.
 
-    python scripts/check_drift.py report.md        # exit 1 if any server offers unclassified tools
+    python scripts/check_drift.py report.md        # exit 1 if any server offers unclassified tools, or could not be checked
 
 New tools are the actionable part: until someone classifies them, every gateway using the registry
 treats them as R4. Tools in the record that the server does not list are reported separately: some
@@ -70,7 +70,8 @@ def main(out: Path) -> int:
         lines += ["No new tools to classify.", ""]
     out.write_text("\n".join(lines), encoding="utf-8")
     print(out.read_text())
-    return 1 if new_tools else 0
+    # A server that could not be checked is drift we cannot see: report it the same way, never as a pass.
+    return 1 if (new_tools or failures) else 0
 
 
 if __name__ == "__main__":

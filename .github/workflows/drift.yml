@@ -50,5 +50,5 @@ jobs:
           if [ -n "$existing" ]; then
             gh issue edit "$existing" --body-file drift-report.md
           else
-            gh issue create --title "Registry drift: servers ship tools the registry does not classify" --label drift --body-file drift-report.md
+            gh issue create --title "Registry drift: new tools to classify, or servers that could not be checked" --label drift --body-file drift-report.md
           fi
