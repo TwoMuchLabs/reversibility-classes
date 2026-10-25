@@ -44,6 +44,8 @@ def main(out: Path) -> None:
             entry = {"s": s["id"], "n": t["name"], "c": t["class"], "r": t["rationale"], "v": t.get("review", "draft")}
             if t.get("disclosure"):
                 entry["d"] = True
+            if t.get("compensation"):
+                entry["u"] = t["compensation"]
             if t.get("when"):
                 entry["w"] = t["when"]
             tools.append(entry)
