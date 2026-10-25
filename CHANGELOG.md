@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+**Check your own agent.**
+
+- **`rclass scan`** reads an MCP client configuration (Claude Desktop, Claude Code, Cursor, VS Code, Windsurf), starts each local server the way the client would, lists its tools and reports them by class. Unclassified tools count as R4; a server's own annotations are shown as untrusted hints; tools that differ between the server you run and the registry record are reported. Arguments, environment values and secret-looking error output are never printed. `--list` starts nothing, `--json` gives the full report, `--fail-on CLASS` makes it a CI gate, `--write-drafts DIR` writes a starting record for unclassified tools.
+- **Records say how a server is installed**: optional `server.packages` (npm or PyPI names, container images) and `server.endpoints` (hosted URLs) in SPEC 5.1 and the schema. All 20 records now carry them.
+- **Conformance vectors** ([docs/conformance.md](docs/conformance.md)): 46 classification cases and 9 invalid records, language-neutral, each tied to a SPEC section, with expected results written from the spec text. They caught three planted bugs when checked.
+- `rclass export` writes the registry as one JSON document; `--override` applies a deployment override to `lookup` and `scan`, with its reason taken from `server.notes`.
+- **Weekly drift check** (`.github/workflows/drift.yml`, `scripts/check_drift.py`): starts the latest release of the 10 registry servers that list their tools without real credentials, and opens a `drift` issue when one ships tools the registry does not classify. First run: Filesystem, Git, Fetch, Memory, Time, Sequential Thinking, Notion, Brave Search and Playwright (with every capability enabled) match their records exactly; Sentry exposes most of its tools through `execute_sentry_tool`, so they cannot be listed directly.
+
 ## v0.2.0 — 2026-10-25
 
 **What "restorable" means, made precise, and a way to make actions restorable.**

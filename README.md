@@ -14,6 +14,38 @@ Agent permission systems ask *which tools* an agent may use, or *how confident* 
 
 Charging a customer $40,000 by mistake is expensive but compensable: refund the charge and the customer is made whole, at a known cost. **R2**. A one-line message to the wrong Slack channel is cheap but permanent: **R4**. Severity scores get these backwards; reversibility doesn't.
 
+## Check your own agent
+
+```bash
+pipx install "git+https://github.com/TwoMuchLabs/reversibility-classes"
+rclass scan
+```
+
+`rclass scan` finds your MCP client configuration (Claude Desktop, Claude Code, Cursor, VS Code or Windsurf), starts each server the way your client does, asks it for its tools, and tells you what an agent connected to it could do:
+
+```text
+files   Filesystem (MCP reference server) · 14 tools
+        R0 10  R1 2  R2 0  R3 0  R4 2
+        irreversible: edit_file, write_file
+
+repo    Git (MCP reference server) · 12 tools
+        R0 7  R1 2  R2 0  R3 2  R4 1
+        irreversible: git_checkout
+
+notes   Memory / knowledge graph (MCP reference server) · 9 tools
+        R0 3  R1 3  R2 0  R3 0  R4 3
+        irreversible: delete_entities, delete_observations, delete_relations
+
+35 tools across 3 servers. 6 irreversible (R4).
+Under the default policy an agent may act alone on 27 (R0–R1); the other 8 need a human.
+```
+
+- **Unknown tools count as R4.** A server or tool the registry doesn't cover is reported, never assumed safe. Its own annotations are shown as a hint, not trusted.
+- **Version drift is flagged.** If your server offers tools the record doesn't list, or the record lists tools your server no longer has, you'll see it.
+- **Nothing secret is printed.** Server arguments and environment values never appear in the output. `--list` shows what's configured without starting anything.
+- **Use it in CI.** `rclass scan .mcp.json --fail-on R4` exits non-zero if anything irreversible is connected; `--json` gives the full report.
+- **Help fill the gaps.** `--write-drafts DIR` writes a starting record for every unclassified tool, ready to [contribute](CONTRIBUTING.md).
+
 ## Why this exists
 
 - **MCP's tool hints are too coarse.** `readOnlyHint` and `destructiveHint` can't say *"compensable"* or *"this is a disclosure"*, and the MCP spec tells clients to treat them as untrusted anyway. This spec maps them conservatively (section 7) and lets an independent registry say more.
@@ -67,10 +99,10 @@ A few classifications worth arguing about:
 
 The registry has had one independent audit; the fixes are applied, and the [open questions](docs/open-classification-questions.md) it raised are waiting for opinions. Disagree with a class? [Open a classification dispute](../../issues/new?template=classification-dispute.yml). That is the point.
 
-## Use it
+## Use it in your own code
 
 ```bash
-pip install git+https://github.com/TwoMuchLabs/reversibility-classes@v0.2.0
+pip install "git+https://github.com/TwoMuchLabs/reversibility-classes"
 rclass lookup sqlite write_query --args '{"query": "DROP TABLE users"}'
 # R4  Irreversible  (registry)
 #   Accepts any non-SELECT statement: UPDATE, DELETE and DROP destroy prior values, and even INSERT can be an upsert (INSERT OR REPLACE, ON CONFLICT DO UPDATE) that overwrites rows.
@@ -91,6 +123,13 @@ session.record(c, decision)
 **Make actions restorable.** If your gateway saves a file's current content before letting the agent overwrite it, `write_file` is restorable in your deployment: declare a `preimage` override and it becomes R1, with the capture checked before every call and its reference logged ([SPEC 5.6](SPEC.md#56-pre-image-capture)). A record of what changed is not enough on its own; you also need a way to write the old state back, before anyone else has seen the change.
 
 Your environment can be safer than the defaults. If you keep point-in-time database backups, publish a **deployment override** that lowers `DROP TABLE` from R4 to R3 (restoring needs a DBA, so not R1), with the reason logged on every decision. A nightly snapshot is not enough on its own: it loses whatever changed since. Overrides can never lower a disclosure.
+
+## Implement it in another language
+
+Most MCP gateways aren't written in Python. Two things make a port straightforward:
+
+- **[Conformance vectors](docs/conformance.md):** 46 classification cases and 9 invalid records in one JSON file, each tied to a section of the spec. Pass them and your implementation agrees with the spec, not just with this repository.
+- **`rclass export`** writes the whole registry as one JSON document, so another implementation can consume it without parsing YAML.
 
 ## Status and roadmap
 
