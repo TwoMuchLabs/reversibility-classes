@@ -55,7 +55,10 @@ For each entry in `invalid_records`, your validator must reject the record. The 
 ## Notes for implementers
 
 - **Type-strict matching.** `equals` and `in` compare JSON types as well as values: `true` does not equal `1` or `"true"`. Several cases test this, because loose equality is the most common way a port goes wrong.
-- **Regular expressions.** `matches` patterns use the common subset of Python `re` and ECMAScript syntax, applied case-insensitively with search semantics (not full-match; anchors are written explicitly).
+- **Regular expressions.** `matches` uses *search* semantics (a match anywhere; anchors are written explicitly), case-insensitive. Registry patterns stay within the subset that behaves the same in Python `re` and ECMAScript: character classes, `\s`, `\b`, `^`, `$`, `?`, `*`, `+`, `|` and groups. Two known differences to guard against in a port: Python's `$` also matches just before a trailing newline (registry patterns that anchor the end write `\s*$`, which makes the two agree), and case-insensitive matching outside ASCII differs between engines (registry patterns are ASCII).
 - **Missing, null and wrong-typed arguments** never satisfy `matches`, `equals` or `in`. An argument present with value `null` is present, so `absent: true` does not match it.
+- **Invalid records.** A record must be rejected if it fails [the JSON schema](../schema/rclass.schema.json) *or* breaks a rule the schema cannot express (a disclosure below R4, a duplicate tool name, a pre-image entry that is not R1, a package with a version). The vectors don't say which check catches which record; any combination that rejects all of them conforms.
+- **Pre-image results.** Where `expect.preimage` is true, your result must carry two things: the class that applies once the gateway confirms the capture, and the `fallback` class to use if it does not. How you represent that is up to you; in `rclass` it is `Classification.preimage` plus `unconfirmed()`.
+- **Scanning is out of scope.** These vectors cover classification. A port of `rclass scan` should also report the *worst* class a tool can reach (the highest of its base class and every rule's class), not the class it gets with no arguments.
 
 The Python runner is [`tests/test_conformance.py`](../tests/test_conformance.py), about 40 lines.

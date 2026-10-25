@@ -21,30 +21,45 @@ pipx install "git+https://github.com/TwoMuchLabs/reversibility-classes"
 rclass scan
 ```
 
-`rclass scan` finds your MCP client configuration (Claude Desktop, Claude Code, Cursor, VS Code or Windsurf), starts each server the way your client does, asks it for its tools, and tells you what an agent connected to it could do:
+`rclass scan` finds your MCP client configuration (Claude Desktop, Claude Code, Cursor, VS Code or Windsurf), starts each local server, asks it for its tools, and tells you what an agent connected to it could do:
 
 ```text
-files   Filesystem (MCP reference server) · 14 tools
-        R0 10  R1 2  R2 0  R3 0  R4 2
-        irreversible: edit_file, write_file
+files     Filesystem (MCP reference server) · 14 tools
+          R0 10  R1 2  R2 0  R3 0  R4 2
+          irreversible (R4): edit_file, write_file
 
-repo    Git (MCP reference server) · 12 tools
-        R0 7  R1 2  R2 0  R3 2  R4 1
-        irreversible: git_checkout
+repo      Git (MCP reference server) · 12 tools
+          R0 7  R1 2  R2 0  R3 2  R4 1
+          irreversible (R4): git_checkout
+          approval each time (R3): git_add, git_reset
 
-notes   Memory / knowledge graph (MCP reference server) · 9 tools
-        R0 3  R1 3  R2 0  R3 0  R4 3
-        irreversible: delete_entities, delete_observations, delete_relations
+notes     Memory / knowledge graph (MCP reference server) · 9 tools
+          R0 3  R1 3  R2 0  R3 0  R4 3
+          irreversible (R4): delete_entities, delete_observations, delete_relations
 
 35 tools across 3 servers. 6 irreversible (R4).
 Under the default policy an agent may act alone on 27 (R0–R1); the other 8 need a human.
+Each tool is counted at the worst class its arguments can reach.
+Registry classes are drafts: checked against source by their author, not yet reviewed by a second person.
 ```
 
-- **Unknown tools count as R4.** A server or tool the registry doesn't cover is reported, never assumed safe. Its own annotations are shown as a hint, not trusted.
-- **Version drift is flagged.** If your server offers tools the record doesn't list, or the record lists tools your server no longer has, you'll see it.
-- **Nothing secret is printed.** Server arguments and environment values never appear in the output. `--list` shows what's configured without starting anything.
-- **Use it in CI.** `rclass scan .mcp.json --fail-on R4` exits non-zero if anything irreversible is connected; `--json` gives the full report.
-- **Help fill the gaps.** `--write-drafts DIR` writes a starting record for every unclassified tool, ready to [contribute](CONTRIBUTING.md).
+What it promises:
+
+- **Worst case, not best case.** A tool is counted at the highest class any of its arguments can reach. Unknown tools and servers count as R4, and a server's own annotations are shown as a hint, never trusted.
+- **No guessing who a server is.** A server is matched to a registry record by the package or image it runs, or a hosted URL. Tool names alone never count, because a server chooses its own; if the names look familiar, it suggests `--assume`.
+- **Minimal environment.** Each server gets only what the official MCP SDKs pass by default (`PATH`, `HOME`, `USER`, …), proxy and certificate settings, and its own `env` from the config. Your cloud keys and tokens stay out. `--inherit-env` passes everything.
+- **Repository configs need consent.** A `.mcp.json`, `.vscode/mcp.json` or `.cursor/mcp.json` belongs to whoever wrote the repository. `rclass scan` asks before starting its servers (or needs `--yes`), and honours what you already approved or disabled in Claude Code.
+- **No secrets in the output.** Arguments, environment values and what a failing server writes are not printed. `--show-server-errors` shows server output with your config's values and common token shapes redacted (best effort).
+- **Built for hostile servers.** Replies are shape-checked, lines and tool lists are capped, and each server runs under a hard deadline in its own process group, killed with its children afterwards.
+- **Drift is flagged.** If your server offers tools the record doesn't list, they count as R4 and are named; `--write-drafts DIR` turns them into a starting record to [contribute](CONTRIBUTING.md).
+
+**In CI, scan without starting anything.** `--list` reads the config and reports the registry's classes for every server it recognises, so a pull request can't run code on your CI machine:
+
+```bash
+rclass scan .mcp.json --list --fail-on R4
+```
+
+Exit codes: `0` ok · `1` something reachable is at or above the threshold (an unidentified server counts as R4) · `2` usage or config error · `3` the scan was incomplete, so the gate can't pass.
 
 ## Why this exists
 
