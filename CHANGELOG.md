@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.3.0 — 2026-10-25
 
 **Check your own agent.**
 
@@ -14,6 +14,8 @@
 - **Conformance vectors** ([docs/conformance.md](docs/conformance.md)): 46 classification cases and 9 invalid records, language-neutral, each tied to a SPEC section, with expected results written from the spec text. They caught three planted bugs when checked.
 - `rclass export` writes the registry as one JSON document; `--override` applies a deployment override to `lookup` and `scan`, with its reason taken from `server.notes`.
 - **Weekly drift check** (`.github/workflows/drift.yml`, `scripts/check_drift.py`): starts the latest release of the 10 registry servers that list their tools without real credentials, and opens a `drift` issue when one ships tools the registry does not classify. First run: Filesystem, Git, Fetch, Memory, Time, Sequential Thinking, Notion, Brave Search and Playwright (with every capability enabled) match their records exactly; Sentry exposes most of its tools through `execute_sentry_tool`, so they cannot be listed directly.
+
+**Install:** `pip install git+https://github.com/TwoMuchLabs/reversibility-classes@v0.3.0`, then `rclass scan`.
 
 ## v0.2.0 — 2026-10-25
 
@@ -34,11 +36,10 @@
 - `preimage` in the schema, with validation; `Classification.preimage`, `fallback` and `unconfirmed()`; `Session.confirm_preimage()`; `Session.record()` refuses a pre-image action without `preimage_ref`. The gateway example shows the capture step.
 - New lint: every R1/R2 entry must name its undo; the open registry may not contain `preimage`.
 
+**Repository**
+- Moved to [TwoMuchLabs/reversibility-classes](https://github.com/TwoMuchLabs/reversibility-classes). Old `waghmaredb/reversibility-classes` URLs, including `pip install git+...` links, redirect automatically.
+
 **Install:** `pip install git+https://github.com/TwoMuchLabs/reversibility-classes@v0.2.0`
-
-## Unreleased (before v0.2.0)
-
-- Repository moved to [TwoMuchLabs/reversibility-classes](https://github.com/TwoMuchLabs/reversibility-classes). Old `waghmaredb/reversibility-classes` URLs, including `pip install git+...` links, redirect automatically.
 
 ## v0.1.0 — 2026-10-23
 

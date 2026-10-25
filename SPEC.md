@@ -1,6 +1,6 @@
 # Reversibility Classes for Agent Actions
 
-**Version:** 0.2.0 (draft)
+**Version:** 0.2.1 (draft)
 **Status:** Request for comments
 **Editor:** Deepak Waghmare
 **License:** This document is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
@@ -251,5 +251,6 @@ Comments are welcome as GitHub issues.
 
 ## Appendix A. Change log
 
+- **0.2.1** — Adds optional `server.packages` and `server.endpoints` to records (Section 5.1), so tools can recognise a server from how it is installed. Records keep `spec_version: '0.2'`.
 - **0.2.0** — Defines *restorable* by three conditions: recorded, writable by the principal, unobserved (Section 3). Adds Section 4.3 on recorded versus restorable and Section 5.6 on pre-image capture. R1 and R2 entries name their compensation (Section 5.2).
 - **0.1.0** — First public draft.
