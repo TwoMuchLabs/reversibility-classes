@@ -255,6 +255,74 @@ def cmd_export(ns: argparse.Namespace) -> int:
     return 0
 
 
+def _class_arg(v: str | None) -> RClass | None:
+    return RClass.parse(v) if v else None
+
+
+def _gate_policy(ns: argparse.Namespace):
+    from .gate import GatePolicy
+    try:
+        return GatePolicy(_class_arg(ns.allow_up_to), _class_arg(ns.deny_from))
+    except ValueError as exc:
+        raise UsageError(str(exc)) from None
+
+
+def _gate_args(ns: argparse.Namespace) -> list[str]:
+    """The policy flags, repeated in a generated hook command so the hook enforces the same policy."""
+    out = []
+    if ns.allow_up_to:
+        out += ["--allow-up-to", ns.allow_up_to]
+    if ns.deny_from:
+        out += ["--deny-from", ns.deny_from]
+    return out
+
+
+def cmd_hook(ns: argparse.Namespace) -> int:
+    from .gate import run_hook
+    policy = _gate_policy(ns)
+    mapping = _parse_assume(ns.map)
+    reg = _registry(ns.registry, ns.override)
+    bad = [r for r in mapping.values() if r not in reg.servers()]
+    if bad:
+        raise UsageError(f"--map names {', '.join(bad)}, which {'is' if len(bad) == 1 else 'are'} not in the registry")
+    return run_hook(sys.stdin, sys.stdout, policy, lambda: reg, mapping, Path(ns.log).expanduser() if ns.log else None)
+
+
+def cmd_policy(ns: argparse.Namespace) -> int:
+    from . import gate
+    from . import scan as sc
+    policy = _gate_policy(ns)
+    if ns.format == "claude-hook":
+        text = gate.claude_hook_settings(_gate_args(ns))
+    else:
+        configs = [Path(p).expanduser() for p in ns.configs] or sc.known_config_paths()
+        missing = [str(p) for p in configs if not p.is_file()]
+        if missing:
+            raise UsageError(f"config not found: {', '.join(missing)}")
+        if not configs:
+            raise UsageError("No MCP client configuration found. Pass a config file: rclass policy --format ... path/to/mcp.json")
+        try:
+            result = gate.static_scan(configs, _registry(ns.registry, ns.override))
+        except ValueError as exc:
+            raise UsageError(str(exc)) from None
+        if not result.servers:
+            raise UsageError(f"No MCP servers configured in {', '.join(map(str, configs))}.")
+        known, unknown = gate.static_classes(result)
+        source = ", ".join(p.name for p in configs)
+        if ns.format == "cedar":
+            text = gate.to_cedar(known, unknown, policy, source)
+        elif ns.format == "cel":
+            text = gate.to_cel(known, unknown, policy, source)
+        else:
+            text = gate.to_claude_settings(known, unknown, policy)
+    if ns.out:
+        Path(ns.out).write_text(text, encoding="utf-8")
+        print(f"wrote {ns.out}", file=sys.stderr)
+    else:
+        sys.stdout.write(text)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="rclass", description="Reversibility Classes for agent actions",
                                 epilog="rclass scan exit codes: 0 ok, 1 threshold reached, 2 usage or config error, "
@@ -315,6 +383,38 @@ def main(argv: list[str] | None = None) -> int:
     ex.add_argument("--compact", action="store_true")
     ex.add_argument("--registry", action="append")
     ex.set_defaults(fn=cmd_export)
+
+    classes = [f"R{i}" for i in range(5)]
+    hk = sub.add_parser("hook", help="enforce classes in an agent client (Claude Code PreToolUse hook)",
+                        description="Reads one Claude Code PreToolUse event on stdin and answers allow, ask or deny for "
+                        "MCP tool calls, using the class of this call with its arguments. Install it with "
+                        "`rclass policy --format claude-hook`.")
+    hk.add_argument("client", choices=["claude-code"])
+    hk.add_argument("--allow-up-to", metavar="CLASS", type=str.upper, choices=classes[:2],
+                    help="let calls at or below this class (R0 or R1) run without a prompt; default: the client decides")
+    hk.add_argument("--deny-from", metavar="CLASS", type=str.upper, choices=classes[1:],
+                    help="block calls at or above this class instead of asking")
+    hk.add_argument("--map", action="append", metavar="SERVER=RECORD",
+                    help="treat a configured server as a registry record (you vouch for it; repeatable)")
+    hk.add_argument("--log", metavar="FILE", help="append one JSON line per decision (class, rule, decision; no arguments)")
+    hk.add_argument("--registry", action="append", help="extra registry path (repeatable)")
+    hk.add_argument("--override", action="append", help="deployment override record (repeatable)")
+    hk.set_defaults(fn=cmd_hook)
+
+    po = sub.add_parser("policy", help="write enforceable policy for a client or gateway from your MCP config",
+                        description="Turns the classes of the servers in an MCP client config into policy: Claude Code "
+                        "permission rules or hook settings, Docker MCP Cedar policies, or agentgateway CEL rules. Starts "
+                        "nothing. Static formats use each tool's worst-case class.")
+    po.add_argument("configs", nargs="*", help="client config files (default: discover)")
+    po.add_argument("--format", required=True, choices=["claude-hook", "claude-settings", "cedar", "cel"])
+    po.add_argument("--allow-up-to", metavar="CLASS", type=str.upper, choices=classes[:2],
+                    help="allow tools at or below this class without approval (R0 or R1)")
+    po.add_argument("--deny-from", metavar="CLASS", type=str.upper, choices=classes[1:],
+                    help="block tools at or above this class instead of requiring approval")
+    po.add_argument("--out", help="write to this file instead of stdout")
+    po.add_argument("--registry", action="append", help="extra registry path (repeatable)")
+    po.add_argument("--override", action="append", help="deployment override record (repeatable)")
+    po.set_defaults(fn=cmd_policy)
 
     ns = p.parse_args(argv)
     try:

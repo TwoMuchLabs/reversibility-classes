@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.4.0 — 2026-10-25
+
+**Enforce it.**
+
+- **`rclass hook claude-code`**: a Claude Code PreToolUse hook that classifies each MCP tool call with its arguments and answers allow, ask or deny. By default R0–R1 calls get no decision and R2–R4 always ask; `--allow-up-to R1` and `--deny-from R4` change that, and `--log` writes one JSON line per decision with the class and rule, never the arguments. Servers are identified from what the Claude Code config runs; unrecognised servers and tools are R4; when a name exists in several scopes the strictest record wins; a failure asks instead of allowing. Handles Claude Code's spelling of server names (`my.server` becomes `my_server`) and names containing `__`.
+- **`rclass policy --format claude-hook | claude-settings | cedar | cel`**: writes enforceable policy from an MCP client config without starting anything. Cedar for Docker MCP governance (R2–R4 as `@requireApproval`), CEL rules for agentgateway (only R0–R1 allowed, since it has no approval step), and Claude Code permission rules. Static formats use each tool's worst-case class, so they are never less strict than the hook; a test checks this.
+
+**Install:** `pip install git+https://github.com/TwoMuchLabs/reversibility-classes@v0.4.0`
+
 ## v0.3.1 — 2026-10-25
 
 **The specification is now Apache 2.0.**

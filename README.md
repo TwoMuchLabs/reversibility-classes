@@ -65,7 +65,35 @@ Exit codes: `0` ok · `1` something reachable is at or above the threshold (an u
 
 `--list` can't see version drift: it applies the record's classes to whatever version the config pins. Run a full scan somewhere you trust (a developer machine, or a scheduled job) to catch tools a newer release added.
 
-## Why this exists
+## Enforce it
+
+**In Claude Code, gate every MCP call by its class.** `rclass hook` is a [PreToolUse hook](https://code.claude.com/docs/en/hooks): Claude Code hands it each MCP tool call with its arguments, and it answers with the class of *that* call. A SELECT through `write_query` is R0; the same tool with `DROP TABLE` is R4 and asks you first, even if you allowlisted the tool.
+
+```bash
+rclass policy --format claude-hook > hook.json   # merge into .claude/settings.json or ~/.claude/settings.json
+```
+
+```text
+rclass: R4 Irreversible (registry). Accepts any non-SELECT statement: UPDATE, DELETE and DROP destroy
+prior values, and even INSERT can be an upsert (…) that overwrites rows. Needs your approval.
+```
+
+By default R0–R1 calls get no decision (your own permission rules apply) and R2–R4 always ask. `--allow-up-to R1` lets low classes run without a prompt, `--deny-from R4` blocks instead of asking, and `--log audit.jsonl` records the class and rule of every decision (never the arguments). Servers are identified from what your Claude Code config runs, as in `rclass scan --list`; an unrecognised server or tool is R4, and if the hook itself fails it asks rather than allowing. A hook can only make Claude Code stricter: your own deny and ask rules still apply.
+
+**For gateways that can't see arguments, export static policy.** These use each tool's worst-case class, so they are never less strict than the hook:
+
+| Format | For | Approval step |
+|---|---|---|
+| `--format cedar` | [Docker MCP governance](https://docs.docker.com/ai/sandboxes/governance/reference/mcp-policy/) | R2–R4 become `@requireApproval` permits; unlisted tools stay denied |
+| `--format cel` | [agentgateway](https://agentgateway.dev/docs/standalone/latest/documentation/configuration/security/mcp-authz/) `mcpAuthorization` | none, so only R0–R1 tools are allowed and the rest are filtered out |
+| `--format claude-settings` | Claude Code permission rules | R2–R4 go to `ask` (or `deny`), which outrank allow rules |
+
+```bash
+rclass policy --format cedar .mcp.json --deny-from R4 > rclass.cedar
+```
+
+Server names in the output are the names in your config; for Docker and agentgateway they must match the names the gateway registered.
+
 
 - **MCP's tool hints are too coarse.** `readOnlyHint` and `destructiveHint` can't say *"compensable"* or *"this is a disclosure"*, and the MCP spec tells clients to treat them as untrusted anyway. This spec maps them conservatively (section 7) and lets an independent registry say more.
 - **Class is a fact about the action type, not a model's opinion.** A gateway can enforce it with no model in the decision path.
