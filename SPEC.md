@@ -1,6 +1,6 @@
 # Reversibility Classes for Agent Actions
 
-**Version:** 0.2.2 (draft)
+**Version:** 0.3.0 (draft)
 **Status:** Request for comments
 **Editor:** Deepak Waghmare
 **License:** This specification is licensed under the [Apache License 2.0](LICENSE), which includes a patent grant to implementers. Versions published before 25 October 2026 were licensed under CC BY 4.0.
@@ -83,7 +83,7 @@ A **classification record** assigns classes to the tools of one tool server. Rec
 
 | Field | Required | Meaning |
 |---|---|---|
-| `spec_version` | yes | The version of this specification the record targets, e.g. `"0.2"`. Records targeting `"0.1"` remain valid. |
+| `spec_version` | yes | The version of this specification the record targets, e.g. `"0.3"`. Records targeting `"0.1"` or `"0.2"` remain valid. |
 | `server.id` | yes | A stable short identifier, e.g. `filesystem`, `github`. |
 | `server.name` | yes | Human-readable name. |
 | `server.source` | yes | URL of the server's repository or documentation. |
@@ -93,6 +93,7 @@ A **classification record** assigns classes to the tools of one tool server. Rec
 | `server.notes` | no | Anything a reviewer should know, e.g. a read-only mode the server enforces. |
 | `server.packages` | no | How people install the server, without versions: npm or PyPI package names, or container images (e.g. `@modelcontextprotocol/server-filesystem`, `mcp-server-git`, `ghcr.io/github/github-mcp-server`). Lets tools recognise the server in a client's configuration. |
 | `server.endpoints` | no | URLs of hosted deployments that expose the same tool set (e.g. `https://mcp.stripe.com`). |
+| `server.min_version` | no | The earliest release of the server the record's `when` rules were checked against, e.g. `"2.0.3"`. When a deployment runs a pinned release older than this, or a pinned release whose version cannot be read (such as a container digest), a classifier **MUST NOT** apply rules that lower a class below the tool's base class. An unpinned deployment runs the newest release and is not older. |
 | `default_class` | no | Class for tools of this server not listed in `tools`. If absent, the fail-closed rule (Section 6) applies. |
 | `tools` | yes | List of tool entries. |
 
@@ -104,6 +105,7 @@ A **classification record** assigns classes to the tools of one tool server. Rec
 | `class` | yes | `R0`–`R4`. The class when no conditional rule matches. This **MUST** be the highest class the tool can reach unless `when` rules cover every case. |
 | `rationale` | yes | One sentence: why this class. |
 | `disclosure` | no | `true` if the tool's effect includes a disclosure (Section 4.1, rule 2). Overrides can never lower such a tool. |
+| `egress` | no | `true` if the tool sends content the caller chooses to a destination the caller chooses, such as a URL or host (Section 9). A tool that sends queries only to its own provider, such as a search API, is not egress. |
 | `when` | no | Ordered list of conditional rules (Section 5.3). |
 | `compensation` | for R1/R2 | The tool(s) or process that restore or compensate, e.g. `create_refund` for a card charge. An R1 or R2 entry (including one reached through a `when` rule) **SHOULD** name it; the open registry requires it. The compensation **MUST** reverse *this* action and **MUST NOT** depend on the consent of a party outside the principal (this restates the definitions of R1 and R2 in Section 3). |
 | `undo_window` | no | ISO 8601 duration during which restoration or compensation remains possible, e.g. `P180D`. |
@@ -151,6 +153,8 @@ A **registry** is a collection of classification records. This repository mainta
 A deployment **MAY** publish an override record with the same shape, scoped to its environment, to raise any class or to lower a non-disclosure class with a stated reason (e.g. "point-in-time backups with 30-day retention"). Overrides **MUST** be logged with every decision they affect.
 
 Some tools are disclosures only because their destination *may* be public: a repository, a wiki page. An override **MAY** lower such a tool only by setting `disclosure: false` on its entry, which asserts that in this deployment the destination is readable by no one outside the principal (for example, "this agent can only reach private repositories"). The assertion and its reason **MUST** be logged with every decision. Without that explicit assertion, an override **MUST NOT** lower a disclosure tool.
+
+When several overrides cover the same tool (for example, one from a platform team and one from a product team), a classifier **MUST** apply the one that gives the call the highest class. An override cannot replace another by being loaded later.
 
 ### 5.6 Pre-image capture
 
@@ -220,7 +224,9 @@ A classifier **MUST** at minimum:
 
 An outbound read request (for example an HTTP `GET`, or navigating a browser) is classified by its intended effect, which is usually R0. The information the request carries to the remote party, such as data encoded in a URL, is the most common exfiltration channel and is an aggregation concern: it is dangerous only in combination with what the session has already read.
 
-Pattern-level rules (for example, blocking R4 actions in any session that has read data labelled confidential) are an open problem and are tracked for v0.3. *(informative)* This is closely related to the "lethal trifecta" of private data, untrusted content and external communication described by Simon Willison.
+**Egress after a read.** A classifier that tracks sessions **SHOULD** treat an `egress` action as R4 once the session has performed any action that is not itself egress, unless the action's destination is on an allow-list the principal configured. Without this rule, reading a secret (R0) and then requesting a URL that carries it (R0) is a disclosure no single class records. The rule is deliberately coarse: it treats every earlier action as a read, because a classifier usually cannot tell which data was private.
+
+Finer pattern-level rules (for example, blocking R4 actions only in sessions that have read data labelled confidential) remain an open problem. *(informative)* This is closely related to the "lethal trifecta" of private data, untrusted content and external communication described by Simon Willison.
 
 ## 10. Audit logging *(informative)*
 
@@ -263,6 +269,7 @@ A record's `spec_version` names `MAJOR.MINOR` (for example `"0.2"`). How changes
 
 ## Appendix A. Change log
 
+- **0.3.0** — Adds `server.min_version` (Section 5.1): rules that lower a class apply only to the release a record was checked against or later. Adds the `egress` tool field (Section 5.2) and a session rule treating egress after a read as R4 unless allow-listed (Section 9). When several deployment overrides cover one tool, the most restrictive result applies (Section 5.5). Records targeting 0.1 and 0.2 remain valid.
 - **0.2.2** — Editorial: cites RFC 8174 (only all-capital key words are normative); restates the compensation requirement of Section 5.2 with key words, as already required by the definitions in Section 3; removes outdated "v0.1" references; points to the conformance vectors from Section 11 (informative); adds Section 13, describing how versions are numbered. No conformance requirement changes.
 - **0.2.1** — Adds optional `server.packages` and `server.endpoints` to records (Section 5.1), so tools can recognise a server from how it is installed. Records keep `spec_version: '0.2'`.
 - **0.2.0** — Defines *restorable* by three conditions: recorded, writable by the principal, unobserved (Section 3). Adds Section 4.3 on recorded versus restorable and Section 5.6 on pre-image capture. R1 and R2 entries name their compensation (Section 5.2).

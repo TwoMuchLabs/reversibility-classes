@@ -8,7 +8,7 @@ The expected results were written from the text of [SPEC.md](../SPEC.md), not ge
 
 ```jsonc
 {
-  "spec_version": "0.2",
+  "spec_version": "0.3",
   "records": { "db": { /* a classification record */ }, ... },
   "cases": [
     {
@@ -23,7 +23,9 @@ The expected results were written from the text of [SPEC.md](../SPEC.md), not ge
         "server": "db", "tool": "execute_sql",
         "arguments": { "query": "select id from t;" },   // optional; absent means no arguments
         "annotations": { "readOnlyHint": true },         // optional MCP tool annotations
-        "trusted_server": false                          // optional; default false
+        "trusted_server": false,                         // optional; default false
+        "deployed_version": "1.3.9",                     // optional: the release the deployment pins (null = unreadable, e.g. a digest)
+        "version_pinned": true                           // optional; default false (unpinned = newest release)
       },
       "expect": {
         "class": "R0",
@@ -57,6 +59,8 @@ For each entry in `invalid_records`, your validator must reject the record. The 
 - **Type-strict matching.** `equals` and `in` compare JSON types as well as values: `true` does not equal `1` or `"true"`. Several cases test this, because loose equality is the most common way a port goes wrong.
 - **Regular expressions.** `matches` uses *search* semantics (a match anywhere; anchors are written explicitly), case-insensitive. Registry patterns stay within the subset that behaves the same in Python `re` and ECMAScript: character classes, `\s`, `\b`, `^`, `$`, `?`, `*`, `+`, `|` and groups. Two known differences to guard against in a port: Python's `$` also matches just before a trailing newline (registry patterns that anchor the end write `\s*$`, which makes the two agree), and case-insensitive matching outside ASCII differs between engines (registry patterns are ASCII).
 - **Missing, null and wrong-typed arguments** never satisfy `matches`, `equals` or `in`. An argument present with value `null` is present, so `absent: true` does not match it.
+- **Versions.** When a record has `server.min_version` and the call is `version_pinned` to an older release, or to one with no readable version, rules that lower the class do not apply (SPEC 5.1). Compare versions numerically by their first three numbers, ignoring a leading `v`.
+- **Several overrides.** Load every override; the one giving the call the highest class applies, regardless of order (SPEC 5.5).
 - **Invalid records.** A record must be rejected if it fails [the JSON schema](../schema/rclass.schema.json) *or* breaks a rule the schema cannot express (a disclosure below R4, a duplicate tool name, a pre-image entry that is not R1, a package with a version). The vectors don't say which check catches which record; any combination that rejects all of them conforms.
 - **Pre-image results.** Where `expect.preimage` is true, your result must carry two things: the class that applies once the gateway confirms the capture, and the `fallback` class to use if it does not. How you represent that is up to you; in `rclass` it is `Classification.preimage` plus `unconfirmed()`.
 - **Scanning is out of scope.** These vectors cover classification. A port of `rclass scan` should also report the *worst* class a tool can reach (the highest of its base class and every rule's class), not the class it gets with no arguments.

@@ -1,6 +1,6 @@
 {
   "$comment": "Conformance vectors for Reversibility Classes. See docs/conformance.md.",
-  "spec_version": "0.2",
+  "spec_version": "0.3",
   "records": {
     "db": {
       "spec_version": "0.2",
@@ -140,6 +140,36 @@
         }
       ],
       "default_class": "R2"
+    },
+    "versioned": {
+      "spec_version": "0.3",
+      "server": {
+        "id": "versioned",
+        "name": "Versioned example",
+        "source": "https://example.com/server",
+        "evidence": [
+          "https://example.com/server/tools.ts"
+        ],
+        "version": "example/server@abc1234",
+        "min_version": "1.4.0"
+      },
+      "tools": [
+        {
+          "name": "create_repo",
+          "class": "R4",
+          "rationale": "A repository can be public.",
+          "disclosure": true,
+          "when": [
+            {
+              "arg": "private",
+              "absent": true,
+              "class": "R1",
+              "rationale": "From 1.4.0 the server makes repositories private by default."
+            }
+          ],
+          "compensation": "delete_repo"
+        }
+      ]
     }
   },
   "cases": [
@@ -1275,6 +1305,220 @@
       "expect": {
         "class": "R4",
         "source": "registry"
+      }
+    },
+    {
+      "id": "min-version-unpinned",
+      "spec": "5.1",
+      "description": "An unpinned deployment runs the newest release, so a rule checked from server.min_version on applies.",
+      "registry": [
+        "versioned"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "versioned",
+        "tool": "create_repo",
+        "arguments": {}
+      },
+      "expect": {
+        "class": "R1",
+        "source": "rule",
+        "rule_index": 0
+      }
+    },
+    {
+      "id": "min-version-pinned-newer",
+      "spec": "5.1",
+      "description": "A deployment pinned at or above server.min_version gets the lowering rule.",
+      "registry": [
+        "versioned"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "versioned",
+        "tool": "create_repo",
+        "arguments": {},
+        "deployed_version": "1.4.0",
+        "version_pinned": true
+      },
+      "expect": {
+        "class": "R1",
+        "source": "rule",
+        "rule_index": 0
+      }
+    },
+    {
+      "id": "min-version-pinned-older",
+      "spec": "5.1",
+      "description": "A deployment pinned below server.min_version gets the base class: a rule that lowers it was not checked against that release.",
+      "registry": [
+        "versioned"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "versioned",
+        "tool": "create_repo",
+        "arguments": {},
+        "deployed_version": "v1.3.9",
+        "version_pinned": true
+      },
+      "expect": {
+        "class": "R4",
+        "source": "registry"
+      }
+    },
+    {
+      "id": "min-version-pinned-unknown",
+      "spec": "5.1",
+      "description": "A deployment pinned to a release whose version cannot be read (a digest) gets the base class.",
+      "registry": [
+        "versioned"
+      ],
+      "overrides": [],
+      "call": {
+        "server": "versioned",
+        "tool": "create_repo",
+        "arguments": {},
+        "deployed_version": null,
+        "version_pinned": true
+      },
+      "expect": {
+        "class": "R4",
+        "source": "registry"
+      }
+    },
+    {
+      "id": "overrides-strictest-platform-first",
+      "spec": "5.5",
+      "description": "When several overrides cover one tool, the one giving the call the highest class applies, whatever order they load in.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [
+        {
+          "record": {
+            "spec_version": "0.3",
+            "server": {
+              "id": "db",
+              "name": "Example database",
+              "source": "https://example.com/db",
+              "evidence": [
+                "https://example.com/db"
+              ],
+              "version": "v1",
+              "notes": "platform floor"
+            },
+            "tools": [
+              {
+                "name": "execute_sql",
+                "class": "R3",
+                "rationale": "Platform: production databases."
+              }
+            ]
+          },
+          "reason": "platform floor"
+        },
+        {
+          "record": {
+            "spec_version": "0.3",
+            "server": {
+              "id": "db",
+              "name": "Example database",
+              "source": "https://example.com/db",
+              "evidence": [
+                "https://example.com/db"
+              ],
+              "version": "v1",
+              "notes": "team"
+            },
+            "tools": [
+              {
+                "name": "execute_sql",
+                "class": "R0",
+                "rationale": "Team: we have backups."
+              }
+            ]
+          },
+          "reason": "team says backups"
+        }
+      ],
+      "call": {
+        "server": "db",
+        "tool": "execute_sql",
+        "arguments": {
+          "query": "select 1;"
+        }
+      },
+      "expect": {
+        "class": "R3",
+        "source": "override"
+      }
+    },
+    {
+      "id": "overrides-strictest-team-first",
+      "spec": "5.5",
+      "description": "When several overrides cover one tool, the one giving the call the highest class applies, whatever order they load in.",
+      "registry": [
+        "db"
+      ],
+      "overrides": [
+        {
+          "record": {
+            "spec_version": "0.3",
+            "server": {
+              "id": "db",
+              "name": "Example database",
+              "source": "https://example.com/db",
+              "evidence": [
+                "https://example.com/db"
+              ],
+              "version": "v1",
+              "notes": "team"
+            },
+            "tools": [
+              {
+                "name": "execute_sql",
+                "class": "R0",
+                "rationale": "Team: we have backups."
+              }
+            ]
+          },
+          "reason": "team says backups"
+        },
+        {
+          "record": {
+            "spec_version": "0.3",
+            "server": {
+              "id": "db",
+              "name": "Example database",
+              "source": "https://example.com/db",
+              "evidence": [
+                "https://example.com/db"
+              ],
+              "version": "v1",
+              "notes": "platform floor"
+            },
+            "tools": [
+              {
+                "name": "execute_sql",
+                "class": "R3",
+                "rationale": "Platform: production databases."
+              }
+            ]
+          },
+          "reason": "platform floor"
+        }
+      ],
+      "call": {
+        "server": "db",
+        "tool": "execute_sql",
+        "arguments": {
+          "query": "select 1;"
+        }
+      },
+      "expect": {
+        "class": "R3",
+        "source": "override"
       }
     }
   ],
