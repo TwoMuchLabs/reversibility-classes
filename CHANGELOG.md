@@ -8,7 +8,6 @@
 - **Version-scoped rules** (SPEC 5.1). The new `server.min_version` names the earliest release a record's rules were checked against. A config pinned to an older release, or to one whose version can't be read (a digest), gets the base class: rules that lower it don't apply. The GitHub record sets `min_version: 2.0.3`, the first release containing the commit it was checked against.
 - **Several overrides** (SPEC 5.5): the one giving the call the highest class applies, whatever order they load in.
 - **Hardened after a second review** that re-ran the first one's attacks and attacked the new code:
-  - The generated hook runs Python with `-P` (or drops the current folder on 3.10), so a repository containing its own `rclass/` package can no longer replace the hook. This hole came in with v0.4.2's `python -m rclass`.
   - What an egress call brings back counts as a read, so fetching an internal page and then an outside one asks.
   - Allow-listing only trusts hosts every parser reads the same way (no userinfo, backslashes or non-ASCII), and every URL in a call's arguments must be allowed.
   - Server configs are fingerprinted at the session's first tool call of any kind, before an agent can rewrite them.
