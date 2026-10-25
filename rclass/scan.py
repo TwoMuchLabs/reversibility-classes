@@ -443,6 +443,90 @@ def run_target(command: str | None, args: list[str], env: Mapping[str, str] | No
     return None, None
 
 
+def _same_path(a: str | None, b: str | None) -> bool:
+    if not a or not b:
+        return False
+    try:
+        return Path(a).resolve() == Path(b).resolve()
+    except OSError:
+        return False
+
+
+def _norm_index(u: str | None) -> str:
+    return (u or "").rstrip("/").lower()
+
+
+def _mapped_package(m, command: str, args: list[str]) -> str | None:
+    """The package an npx/uvx launch runs, if it installs from exactly the mapping's internal index."""
+    exe = Path(command).name.lower()
+    if exe in ("npx", "bunx", "pnpx"):
+        target, flags = _first_positional(args, _NPX_VALUE_FLAGS)
+        if {"-p", "--package", "-c", "--call"} & set(flags):
+            return None
+        index_flags = {"--registry"}
+    elif exe == "uvx":
+        target, flags = _first_positional(args, _UVX_VALUE_FLAGS)
+        if {"--from", "--spec", "--with", "--with-editable", "--with-requirements"} & set(flags):
+            return None
+        index_flags = {"--index", "--index-url", "--default-index"}
+    else:
+        return None
+    if set(flags) & (_REGISTRY_FLAGS - index_flags):
+        return None  # another index, extra index or extra packages
+    given = [flags[f] for f in index_flags if f in flags]
+    if len(given) != 1 or _norm_index(given[0]) != _norm_index(m.registry):
+        return None
+    if not target or _custom_source(target):
+        return None
+    return target
+
+
+def identify_by_mapping(cfg: ServerConfig, registry: Registry) -> tuple[str | None, str | None, bool, str | None]:
+    """(record, deployed version, pinned, note) from the platform team's server mappings (rclass/servers.py)."""
+    from .servers import _norm_url
+    from .versions import pinned_version
+    maps = getattr(registry, "mappings", None) or []
+    if not maps:
+        return None, None, False, None
+    hits: list[tuple[str, str | None, bool]] = []
+    if cfg.remote:
+        url = _norm_url(cfg.url or "")
+        for m in maps:
+            if m.kind == "url":
+                e = _norm_url(m.value)
+                if url == e or url.startswith(e + "/"):
+                    hits.append((m.record, m.version, bool(m.version)))
+    else:
+        command, args = cfg.command or "", list(cfg.args)
+        bad_env = sorted(k for k in cfg.env if _CODE_CHANGING_ENV.match(k))
+        if bad_env:
+            return None, None, False, f"its config sets {', '.join(bad_env[:3])}, which can change what code runs"
+        path = Path(command)
+        if command != path.name and cfg.project_root and \
+                str(path.resolve()).startswith(str(Path(cfg.project_root).resolve()) + os.sep):
+            return None, None, False, "runs a launcher from inside the project, which may not be the system's own"
+        target, _ = run_target(command, args, cfg.env, cfg.project_root)
+        for m in maps:
+            if m.kind == "command" and path.is_absolute() and _same_path(command, m.value) and \
+                    (m.args is None or tuple(args) == m.args):
+                hits.append((m.record, m.version, bool(m.version)))
+            elif m.kind == "module" and path.is_absolute() and _same_path(command, m.python) and \
+                    args[:2] == ["-m", m.value]:
+                hits.append((m.record, m.version, bool(m.version)))
+            elif m.kind == "image" and target and _strip_version(target).lower() == _strip_version(m.value).lower():
+                hits.append((m.record, *pinned_version(target)))
+            elif m.kind == "package":
+                pkg = _mapped_package(m, command, args)
+                if pkg and _strip_version(pkg).lower() == _strip_version(m.value).lower():
+                    hits.append((m.record, *pinned_version(pkg)))
+    records = {h[0] for h in hits}
+    if len(records) > 1:
+        return None, None, False, f"server mappings name several records ({', '.join(sorted(records))})"
+    if not hits:
+        return None, None, False, None
+    return hits[0][0], hits[0][1], hits[0][2], None
+
+
 def _package_index(registry: Registry) -> dict[str, set[str]]:
     index: dict[str, set[str]] = {}
     for rec in registry.records:
@@ -905,8 +989,9 @@ def _scan_server(cfg, registry, timeout, start, inherit_env, assume, show_server
     def registry_tools(sid: str) -> None:
         rep.tools, _ = _tool_reports(sid, [{"name": n} for n in sorted(_tool_names(registry, sid))], registry)
 
+    msid, _, _, mnote = identify_by_mapping(cfg, registry)
     if cfg.remote:
-        sid, exact = identify_by_endpoint(cfg, registry)
+        sid, exact = (msid, True) if msid else identify_by_endpoint(cfg, registry)
         rep.status = "remote"
         if sid:
             use_record(sid, "endpoint")
@@ -920,9 +1005,11 @@ def _scan_server(cfg, registry, timeout, start, inherit_env, assume, show_server
 
     sid, note = identify_by_package(cfg, registry)
     rep.target, _ = run_target(cfg.command, cfg.args, cfg.env, cfg.project_root)
-    rep.source_note = note
+    rep.source_note = mnote or note
     if assumed:
         use_record(assumed, "assumed")
+    elif msid:
+        use_record(msid, "mapping")
     elif sid:
         use_record(sid, "package")
 
@@ -1106,7 +1193,8 @@ def render_text(result: ScanResult, details: bool = False, drafts_written: bool 
             out.append("")
             continue
         if s.record:
-            how = " · assumed with --assume" if s.matched_by == "assumed" else ""
+            how = {"assumed": " · assumed with --assume", "mapping": " · recognised by your server mapping"}.get(
+                s.matched_by or "", "")
             ver = f" · record checked at {s.record_version}" if (details and s.record_version) else ""
             out.append(f"{head}{s.record_name} · {_n(len(s.tools), 'tool')}{how}{ver}")
         else:

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "rclass"
-version = "0.7.0"
+version = "0.8.0"
 description = "Reversibility Classes (R0-R4) for AI agent tool calls: spec, open registry and reference classifier"
 readme = "README.md"
 requires-python = ">=3.10"

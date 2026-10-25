@@ -101,10 +101,14 @@ def server_records(configs: Iterable[Path], registry: Registry, cwd: Path, home:
             if not cfg.remote and not cfg.config_error:
                 target, _ = sc.run_target(cfg.command, cfg.args, cfg.env, cfg.project_root)
                 version, pinned = pinned_version(target)
+            msid, mver, mpinned, _ = (None, None, False, None) if cfg.config_error else \
+                sc.identify_by_mapping(cfg, registry)
             if name in mapped and not cfg.project and not cfg.config_error:
                 sid = mapped[name]
             elif cfg.config_error:
                 sid = None
+            elif msid:
+                sid, version, pinned = msid, mver, mpinned  # the platform team's mapping (rclass/servers.py)
             elif cfg.remote:
                 sid, _ = sc.identify_by_endpoint(cfg, registry)
             else:

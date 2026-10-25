@@ -89,6 +89,24 @@ By default R0–R1 calls get no decision (your own permission rules apply) and R
 2026-10-25T13:04:40+00:00  R4  web/fetch  ask: not run (refused or cancelled)  (session 3f2a9c1e, alex@laptop)
 ```
 
+**Recognise your own servers.** A server mapping file, kept where agents and repositories can't write (`/etc/rclass/servers.yaml` by default, or `RCLASS_SERVERS`, or `--servers FILE`), says which of your launchers, mirrored images, internal packages or gateway URLs runs which registry record. The record can be public or your own (`--registry`).
+
+```yaml
+servers:
+  - record: github
+    image: registry.corp.example/mcp/github-mcp-server     # a mirror; the tag still counts for min_version
+  - record: corp-billing
+    command: /opt/mcp/billing/bin/server                    # an absolute launcher, with its exact arguments
+    args: [--stdio]
+  - record: corp-db
+    package: "@corp/db-mcp"                                 # from your internal npm registry only
+    registry: https://npm.corp.example
+  - record: github
+    url: https://mcp-gw.corp.example/github                 # a gateway that fronts a public server
+```
+
+The usual protections still apply: an `env` that changes which code runs, a launcher inside the project, extra packages or indexes, or two mappings naming different records leave a server unrecognised. `rclass scan` marks servers it recognised through a mapping, and warns if you can edit the mapping file yourself.
+
 **For gateways that can't see arguments, export static policy.** These use each tool's worst-case class, so they are never less strict than the hook:
 
 | Format | For | Approval step |
@@ -111,7 +129,7 @@ Read these before relying on the hook as a control.
 - **It runs on the developer's machine.** The hook asks before a built-in tool writes to its session state, its log or Claude Code's settings, assumes a read if its state can't be kept or has disappeared mid-session, and runs Python with `-P` so a repository can't substitute its own `rclass` package. An agent determined to get around it on the same machine still can, for example through a shell command that never names those paths. Use it to catch mistakes, not as a boundary against a compromised agent; for that, enforce at a gateway the agent cannot reach.
 - **If Claude Code cannot start the hook at all**, or it times out, Claude Code runs the call under your normal permission rules. The generated settings run a fixed interpreter (`python -m rclass`) with a timeout to make that unlikely. If you need a floor that holds even then, add `--format claude-settings` through managed settings; it asks for every tool whose worst case is R2 or above, so it prompts more than the hook.
 - **Records are checked against one release of each server.** A record can say which release with `server.min_version`; if your config pins an older release, or one whose version can't be read, the rules that lower a class are ignored and you get the stricter base class. Only the GitHub record sets it so far. An unpinned image or package counts as the newest release, so a stale cached image is treated as new.
-- **Your own servers are unrecognised** (R4, so every call asks) until you add records for them with `--registry`, or vouch for one with `--map`.
+- **Your own servers need a mapping.** A server launched from an absolute path, an internal registry image, an internal npm or PyPI index, `python -m`, or a gateway URL matches no public record, so it is R4 and every call asks, until your platform team maps it (below).
 - **MCP tools, plus `WebFetch` after a read.** The hook sees every tool so the session guard knows when data has been read, but it only decides MCP calls and `WebFetch`; other built-in tools are left to Claude Code's rules. It adds about 0.1 s to each built-in tool call and about 0.4 s to each MCP call.
 
 
@@ -202,7 +220,7 @@ Most MCP gateways aren't written in Python. Two things make a port straightforwa
 
 ## Status and roadmap
 
-The specification is v0.4.0, a draft for comment; `rclass` 0.7 implements it and adds `rclass scan`, the Claude Code hook and policy exports (the tool and the spec are versioned separately). See the [changelog](CHANGELOG.md). Open questions for v0.3 include a **detection window** (how long a mistake usually goes unnoticed), **pattern rules** for sequences of actions that are harmless alone but not together, and whether a reversibility hint belongs in MCP itself. See [SPEC section 12](SPEC.md#12-open-questions-for-v03).
+The specification is v0.4.0, a draft for comment; `rclass` 0.8 implements it and adds `rclass scan`, the Claude Code hook and policy exports (the tool and the spec are versioned separately). See the [changelog](CHANGELOG.md). Open questions for v0.3 include a **detection window** (how long a mistake usually goes unnoticed), **pattern rules** for sequences of actions that are harmless alone but not together, and whether a reversibility hint belongs in MCP itself. See [SPEC section 12](SPEC.md#12-open-questions-for-v03).
 
 ## License
 

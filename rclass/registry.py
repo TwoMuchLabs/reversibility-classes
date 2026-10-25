@@ -131,6 +131,7 @@ class Registry:
     # an override must name an owner, an approver and an expiry before it may lower a class.
     environment: str | None = None
     governed: bool = False
+    mappings: list = field(default_factory=list)  # the platform team's server mappings (rclass/servers.py)
 
     # -- loading ---------------------------------------------------------
     def add(self, record: dict, origin: str = "<record>") -> None:
