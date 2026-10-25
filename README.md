@@ -22,7 +22,7 @@ Charging a customer $40,000 by mistake is expensive but compensable: refund the 
 - **Unknown means R4.** Unclassified tools fail closed.
 - **Audit-ready.** Logging the class and the rule behind every decision answers "which irreversible actions did this agent take, and who approved them?"
 
-Read the full specification: **[SPEC.md](SPEC.md)** (v0.1, draft for comment).
+Read the full specification: **[SPEC.md](SPEC.md)** (v0.2, draft for comment).
 
 Browse the whole registry: **[reversibility.twomuchlabs.com](https://reversibility.twomuchlabs.com)**.
 
@@ -70,7 +70,7 @@ The registry has had one independent audit; the fixes are applied, and the [open
 ## Use it
 
 ```bash
-pip install git+https://github.com/TwoMuchLabs/reversibility-classes
+pip install git+https://github.com/TwoMuchLabs/reversibility-classes@v0.2.0
 rclass lookup sqlite write_query --args '{"query": "DROP TABLE users"}'
 # R4  Irreversible  (registry)
 #   Accepts any non-SELECT statement: UPDATE, DELETE and DROP destroy prior values, and even INSERT can be an upsert (INSERT OR REPLACE, ON CONFLICT DO UPDATE) that overwrites rows.
@@ -94,7 +94,7 @@ Your environment can be safer than the defaults. If you keep point-in-time datab
 
 ## Status and roadmap
 
-v0.1 is a draft for comment. Open questions for v0.2 include a **detection window** (how long a mistake usually goes unnoticed), **pattern rules** for sequences of actions that are harmless alone but not together, and whether a reversibility hint belongs in MCP itself. See [SPEC section 12](SPEC.md#12-open-questions-for-v02).
+v0.2 is a draft for comment. It defines *restorable* precisely and adds pre-image capture; see the [changelog](CHANGELOG.md). Open questions for v0.3 include a **detection window** (how long a mistake usually goes unnoticed), **pattern rules** for sequences of actions that are harmless alone but not together, and whether a reversibility hint belongs in MCP itself. See [SPEC section 12](SPEC.md#12-open-questions-for-v03).
 
 ## License
 

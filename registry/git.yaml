@@ -1,6 +1,6 @@
 # Reversibility Classes — Git (MCP reference server)
 # Tool names verified against the evidence URLs below. Classes are drafts until reviewed.
-spec_version: '0.1'
+spec_version: '0.2'
 server:
   id: git
   name: Git (MCP reference server)

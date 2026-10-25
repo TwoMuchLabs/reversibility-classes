@@ -83,7 +83,7 @@ A **classification record** assigns classes to the tools of one tool server. Rec
 
 | Field | Required | Meaning |
 |---|---|---|
-| `spec_version` | yes | The version of this specification the record targets, e.g. `"0.1"`. |
+| `spec_version` | yes | The version of this specification the record targets, e.g. `"0.2"`. Records targeting `"0.1"` remain valid. |
 | `server.id` | yes | A stable short identifier, e.g. `filesystem`, `github`. |
 | `server.name` | yes | Human-readable name. |
 | `server.source` | yes | URL of the server's repository or documentation. |
@@ -218,7 +218,7 @@ In v0.1, a classifier **MUST** at minimum:
 
 An outbound read request (for example an HTTP `GET`, or navigating a browser) is classified by its intended effect, which is usually R0. The information the request carries to the remote party, such as data encoded in a URL, is the most common exfiltration channel and is an aggregation concern: it is dangerous only in combination with what the session has already read.
 
-Pattern-level rules (for example, blocking R4 actions in any session that has read data labelled confidential) are an open problem and are tracked for v0.2. *(informative)* This is closely related to the "lethal trifecta" of private data, untrusted content and external communication described by Simon Willison.
+Pattern-level rules (for example, blocking R4 actions in any session that has read data labelled confidential) are an open problem and are tracked for v0.3. *(informative)* This is closely related to the "lethal trifecta" of private data, untrusted content and external communication described by Simon Willison.
 
 ## 10. Audit logging *(informative)*
 
@@ -237,7 +237,7 @@ A classifier conforms to v0.1 if it:
 
 A classification record conforms if it validates against the schema and every tool entry has a class and a rationale.
 
-## 12. Open questions for v0.2
+## 12. Open questions for v0.3
 
 - **Detection window.** How long a mistake typically goes unnoticed matters as much as whether it can be undone. Should records carry a `detection_window` alongside `undo_window`?
 - **Aggregation rules.** A minimal, enforceable pattern language for sequences.
@@ -249,5 +249,5 @@ Comments are welcome as GitHub issues.
 
 ## Appendix A. Change log
 
-- **0.2.0 (draft)** — Defines *restorable* by three conditions: recorded, writable by the principal, unobserved (Section 3). Adds Section 4.3 on recorded versus restorable and Section 5.6 on pre-image capture. R1 and R2 entries name their compensation (Section 5.2).
+- **0.2.0** — Defines *restorable* by three conditions: recorded, writable by the principal, unobserved (Section 3). Adds Section 4.3 on recorded versus restorable and Section 5.6 on pre-image capture. R1 and R2 entries name their compensation (Section 5.2).
 - **0.1.0** — First public draft.
