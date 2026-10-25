@@ -41,6 +41,18 @@ def _registry(paths: list[str] | None, overrides: list[str] | None = None, exten
     return reg
 
 
+def _with_mappings(reg: Registry, ns: argparse.Namespace) -> Registry:
+    """Load the platform team's server mappings (--servers, RCLASS_SERVERS, or /etc/rclass/servers.yaml)."""
+    from . import servers
+    paths = servers.default_paths(getattr(ns, "servers", None))
+    try:
+        reg.mappings = servers.load(paths)
+        servers.check(reg.mappings, reg.servers())
+    except servers.MappingError as exc:
+        raise UsageError(str(exc)) from None
+    return reg
+
+
 def cmd_lookup(ns: argparse.Namespace) -> int:
     try:
         args = json.loads(ns.args) if ns.args else None
@@ -146,7 +158,11 @@ def cmd_scan(ns: argparse.Namespace) -> int:
               ".mcp.json), Cursor, VS Code (.vscode/mcp.json) and Windsurf.\n"
               "Pass a config file explicitly: rclass scan path/to/mcp.json", file=sys.stderr)
         return EXIT_USAGE
-    registry = _registry(ns.registry, ns.override)
+    registry = _with_mappings(_registry(ns.registry, ns.override), ns)
+    from . import servers as _servers
+    for path in _servers.writable(_servers.default_paths(ns.servers)):
+        print(f"warning: you can edit the server mapping {path}, so an agent running as you could too; "
+              "keep it where only the platform team can write.", file=sys.stderr)
     assume = _parse_assume(ns.assume)
     try:
         servers = sc.collect(configs, all_projects=ns.all_projects)
@@ -275,6 +291,8 @@ def _gate_args(ns: argparse.Namespace) -> list[str]:
         out += ["--allow-up-to", ns.allow_up_to]
     if ns.deny_from:
         out += ["--deny-from", ns.deny_from]
+    for path in getattr(ns, "servers", None) or []:
+        out += ["--servers", str(Path(path).expanduser().resolve())]  # the hook runs from another folder
     return out
 
 
@@ -293,7 +311,7 @@ def cmd_hook(ns: argparse.Namespace) -> int:
     def registry() -> Registry:
         # Loaded only for MCP calls: Claude Code's own tools pass through the hook on every call and need no
         # registry. A problem here surfaces inside run_hook, which asks with the reason.
-        reg = _registry(ns.registry, ns.override)
+        reg = _with_mappings(_registry(ns.registry, ns.override), ns)
         bad = [r for r in mapping.values() if r not in reg.servers()]
         if bad:
             raise UsageError(f"--map names {', '.join(bad)}, which {'is' if len(bad) == 1 else 'are'} not in the registry")
@@ -316,7 +334,7 @@ def cmd_policy(ns: argparse.Namespace) -> int:
         if not configs:
             raise UsageError("No MCP client configuration found. Pass a config file: rclass policy --format ... path/to/mcp.json")
         try:
-            result = gate.static_scan(configs, _registry(ns.registry, ns.override))
+            result = gate.static_scan(configs, _with_mappings(_registry(ns.registry, ns.override), ns))
         except ValueError as exc:
             raise UsageError(str(exc)) from None
         if not result.servers:
@@ -397,6 +415,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="exit 1 if anything reachable is at or above CLASS (R0-R4); exit 3 if the scan is incomplete")
     sc.add_argument("--write-drafts", metavar="DIR", help="write draft records for unclassified tools, to contribute")
     sc.add_argument("--registry", action="append", help="extra registry path (repeatable)")
+    sc.add_argument("--servers", action="append", metavar="FILE",
+                    help="server mappings recognising your own MCP servers (default: RCLASS_SERVERS, else "
+                    "/etc/rclass/servers.yaml); keep the file where agents can't write")
     sc.add_argument("--override", action="append", help="deployment override record (repeatable; reason in server.notes)")
     sc.set_defaults(fn=cmd_scan)
 
@@ -443,6 +464,9 @@ def main(argv: list[str] | None = None) -> int:
                     "effective class, decision; never arguments). Default: ~/.local/state/rclass/audit.jsonl")
     hk.add_argument("--no-log", action="store_true", help="do not write the decision log")
     hk.add_argument("--registry", action="append", help="extra registry path (repeatable)")
+    hk.add_argument("--servers", action="append", metavar="FILE",
+                    help="server mappings recognising your own MCP servers (default: RCLASS_SERVERS, else "
+                    "/etc/rclass/servers.yaml); keep the file where agents can't write")
     hk.add_argument("--override", action="append", help="deployment override record (repeatable)")
     hk.set_defaults(fn=cmd_hook)
 
@@ -470,6 +494,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="with --format claude-hook: hosts the session guard lets calls send data to")
     po.add_argument("--out", help="write to this file instead of stdout")
     po.add_argument("--registry", action="append", help="extra registry path (repeatable)")
+    po.add_argument("--servers", action="append", metavar="FILE",
+                    help="server mappings recognising your own MCP servers (default: RCLASS_SERVERS, else "
+                    "/etc/rclass/servers.yaml); keep the file where agents can't write")
     po.add_argument("--override", action="append", help="deployment override record (repeatable)")
     po.set_defaults(fn=cmd_policy)
 

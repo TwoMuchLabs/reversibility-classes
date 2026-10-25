@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.7.0 — 2026-10-25
+
+**Recognise your own servers.**
+
+- **Server mappings** (`rclass/servers.py`). A file the platform team keeps outside any repository says which internal launcher, mirrored image, internal npm or PyPI package, `python -m` module or gateway URL runs which registry record. Without one, every call to an internal server was unrecognised (R4) and asked, which the red team called the main cause of prompt fatigue.
+- Read from `--servers FILE` (on `scan`, `hook` and `policy`), else `RCLASS_SERVERS`, else `/etc/rclass/servers.yaml`. `rclass policy --format claude-hook` carries `--servers` into the hook as an absolute path.
+- **The protections still apply.** A mapping never matches a config with an `env` that changes which code runs, a launcher inside the project, different arguments than the mapping lists, another index or extra packages, a command after the image, or a lookalike URL. Two mappings naming different records leave the server unrecognised. A mirrored image's tag still counts for `min_version`.
+- `rclass scan` marks servers recognised by a mapping and warns when you can edit the mapping file; a mapping naming a record the registry lacks is an error (the hook asks).
+
+**Install:** `pip install git+https://github.com/TwoMuchLabs/reversibility-classes@v0.7.0`
+
 ## v0.6.0 — 2026-10-25
 
 **An audit log an auditor can use.**

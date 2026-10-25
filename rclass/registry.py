@@ -126,6 +126,7 @@ class Registry:
     _tools: dict[tuple[str, str], list[ToolEntry]] = field(default_factory=dict)
     _defaults: dict[str, list[RClass]] = field(default_factory=dict)
     _overrides: dict[tuple[str, str], list[tuple[ToolEntry, str]]] = field(default_factory=dict)
+    mappings: list = field(default_factory=list)  # the platform team's server mappings (rclass/servers.py)
 
     # -- loading ---------------------------------------------------------
     def add(self, record: dict, origin: str = "<record>") -> None:
