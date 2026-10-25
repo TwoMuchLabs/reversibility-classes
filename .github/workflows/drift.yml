@@ -7,6 +7,13 @@ on:
   schedule:
     - cron: "17 22 * * 0"   # Monday 06:17 Singapore time
   workflow_dispatch:
+  push:                     # and whenever a record or the check itself changes
+    branches: [main]
+    paths:
+      - "registry/**"
+      - "scripts/check_drift.py"
+      - "scripts/drift_targets.json"
+      - ".github/workflows/drift.yml"
 
 permissions:
   contents: read
@@ -32,6 +39,7 @@ jobs:
           set +e
           python scripts/check_drift.py drift-report.md
           echo "drift=$?" >> "$GITHUB_OUTPUT"
+          [ -f drift-report.md ] && cat drift-report.md >> "$GITHUB_STEP_SUMMARY" || true
       - name: Open or update the drift issue
         if: steps.check.outputs.drift == '1'
         env:
