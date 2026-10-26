@@ -24,7 +24,7 @@ def test_validate_outside_repo_checks_bundled_registry(tmp_path, capsys, monkeyp
     code, out, err = run(["validate"], capsys, tmp_path, monkeypatch)
     assert code == 0
     assert "bundled registry" in err
-    assert "20/20 records valid" in out
+    assert "21/21 records valid" in out
 
 
 def test_validate_missing_path(tmp_path, capsys, monkeypatch):
