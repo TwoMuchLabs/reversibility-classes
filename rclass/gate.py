@@ -44,7 +44,8 @@ class GatePolicy:
     """
 
     def __init__(self, allow_up_to: RClass | None = None, deny_from: RClass | None = None,
-                 egress_allow: Iterable[str] = ()):
+                 egress_allow: Iterable[str] = (), budgets: Iterable[Any] = ()):
+        self.budgets = list(budgets)  # rclass/budgets.py: R2 calls that may run unprompted, up to a limit
         self.egress_allow = [h.lower().lstrip(".") for h in egress_allow if h]
         if allow_up_to is not None and allow_up_to >= RClass.R2:
             raise ValueError("--allow-up-to can be R0 or R1: R2 and above need a human by default (SPEC 8)")
@@ -476,13 +477,25 @@ def run_hook(stdin: TextIO, stdout: TextIO, policy: GatePolicy, registry_factory
         egress = any(e.raw.get("egress") for sid in sids for e in registry.entries(sid, tool))
         c = session_guard(c, egress, args, state, policy)
         decision = policy.decide(c.rclass)
+        spent = None
+        if decision == "ask" and policy.budgets:
+            from . import budgets as bu
+            session_key = state.path.stem if state.path is not None else None
+            spent = bu.spend(policy.budgets, bu.Ledger(state_root or state_dir()), c.rclass, c.source, sids, tool,
+                             args, session_key)
+            if spent is not None:
+                decision = "allow"
         effective = state.raise_to(c.rclass)
         state.save()
         if log_path is not None:
-            _log(log_path, event, server_name, tool, c, decision, effective)
+            _log(log_path, event, server_name, tool, c, decision, effective,
+                 {"budget": spent.to_log()} if spent is not None else None)
         if decision is None:
             return 0
-        _emit(stdout, decision, _reason(c, server_name, decision))
+        reason = _reason(c, server_name, decision)
+        if spent is not None:
+            reason += f" Allowed {spent.describe()} (SPEC 8)."
+        _emit(stdout, decision, reason)
         return 0
     except Exception as exc:  # noqa: BLE001 - the one thing a gate must not do is fail open
         what = exc.__class__.__name__
@@ -492,7 +505,7 @@ def run_hook(stdin: TextIO, stdout: TextIO, policy: GatePolicy, registry_factory
 
 
 def _log(path: Path, event: Mapping[str, Any], server: str, tool: str, c: Classification, decision: str | None,
-         effective: RClass | None = None) -> None:
+         effective: RClass | None = None, extra: Mapping[str, Any] | None = None) -> None:
     """One hash-chained line per decision (SPEC 9 and 10; see rclass/audit.py): the class, the rule behind it,
     the session's effective class, an override's reason, who and where, and a digest of the arguments, never
     the arguments themselves."""
@@ -505,6 +518,7 @@ def _log(path: Path, event: Mapping[str, Any], server: str, tool: str, c: Classi
              "args_sha256": audit.args_digest(args if isinstance(args, Mapping) else None)}
     if c.source == "override":
         entry["rationale"] = c.rationale  # carries the override's logged reason (SPEC 5.5)
+    entry.update(extra or {})
     audit.append(path, entry)
 
 

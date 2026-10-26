@@ -80,7 +80,7 @@ rclass: R4 Irreversible (registry). Accepts any non-SELECT statement: UPDATE, DE
 prior values, and even INSERT can be an upsert (…) that overwrites rows. Needs your approval.
 ```
 
-By default R0–R1 calls get no decision (your own permission rules apply) and R2–R4 always ask. After a session has read anything, a call that can carry data to a destination the agent chooses is treated as R4 (SPEC 9), so "read the credentials file, then fetch a URL with them in it" asks before the fetch. `--allow-up-to R1` lets low classes run without a prompt and `--deny-from R4` blocks instead of asking. Every decision is logged to `~/.local/state/rclass/audit.jsonl` with its class, rule, the session's effective class, the user, host and Claude Code permission mode, and a SHA-256 digest of the arguments, never the arguments themselves (`--log FILE` to move it, `--no-log` to stop). The hook also runs after each call it decides about, so the log knows which prompts led to the call running. Servers are identified from what your Claude Code config runs, as in `rclass scan --list`, using Claude Code's project folder rather than wherever the agent has moved to. An unrecognised server or tool is R4, and so is a server whose config changes during a session. `--map NAME=RECORD` vouches for a server in your own user config; a repository's `.mcp.json` cannot use it. Any error inside the hook asks rather than allowing. A hook can only make Claude Code stricter: your own deny and ask rules still apply.
+By default R0–R1 calls get no decision (your own permission rules apply) and R2–R4 ask, unless an R2 call is within a budget your platform team set (below). After a session has read anything, a call that can carry data to a destination the agent chooses is treated as R4 (SPEC 9), so "read the credentials file, then fetch a URL with them in it" asks before the fetch. `--allow-up-to R1` lets low classes run without a prompt and `--deny-from R4` blocks instead of asking. Every decision is logged to `~/.local/state/rclass/audit.jsonl` with its class, rule, the session's effective class, the user, host and Claude Code permission mode, and a SHA-256 digest of the arguments, never the arguments themselves (`--log FILE` to move it, `--no-log` to stop). The hook also runs after each call it decides about, so the log knows which prompts led to the call running. Servers are identified from what your Claude Code config runs, as in `rclass scan --list`, using Claude Code's project folder rather than wherever the agent has moved to. An unrecognised server or tool is R4, and so is a server whose config changes during a session. `--map NAME=RECORD` vouches for a server in your own user config; a repository's `.mcp.json` cannot use it. Any error inside the hook asks rather than allowing. A hook can only make Claude Code stricter: your own deny and ask rules still apply.
 
 **Answer the auditor's question.** `rclass audit report` lists every R3 or R4 decision, and everything that asked or blocked, with what happened next: approved and ran, refused, or blocked. Each log line carries the hash of the one before it, so `rclass audit verify` exits 1 if a line was changed, removed or reordered. That makes tampering on the same machine evident, not impossible: ship the log to storage the agent can't write if it has to hold up.
 
@@ -107,6 +107,33 @@ servers:
 
 The usual protections still apply: an `env` that changes which code runs, a launcher inside the project, extra packages or indexes, or two mappings naming different records leave a server unrecognised. `rclass scan` marks servers it recognised through a mapping, and warns if you can edit the mapping file yourself.
 
+**Let routine R2 calls run within a budget.** SPEC 8 lets an R2 (compensable) call run without a prompt when it falls within a pre-approved budget. Without one, every R2 call asks, and people asked dozens of times a day stop reading the prompt. A budget file, kept where agents can't write (`/etc/rclass/budgets.yaml` by default, or `RCLASS_BUDGETS`, or `--budgets FILE`), says which R2 tools may run unprompted, how often and for how much:
+
+```yaml
+budgets:
+  - name: supabase-branches
+    server: supabase                 # a registry record id, not the name in your MCP config
+    tools: [create_branch]           # default: every R2 tool of the server
+    max_calls: 5
+    window: 1d                       # s, m, h or d; omit for "per session"
+    scope: user                      # all of this OS user's sessions; default: each session
+  - name: small-credits
+    server: corp-billing
+    tools: [issue_credit]
+    max_calls: 20
+    window: 1d
+    scope: user
+    where: {currency: usd}           # only calls whose arguments equal these
+    amount: {arg: amount_cents, max_each: 5000, max_total: 20000}
+```
+
+```text
+rclass: R2 Compensable (registry). Creates a branch that incurs hourly compute charges; … Allowed within
+budget 'supabase-branches': call 3 of 5 per day (SPEC 8).
+```
+
+A budget never covers R3 or R4, an unrecognised server, a call the session guard raised, or a call whose amount argument is missing or not a number. Each call is counted under a lock before it runs, so parallel calls can't both take the last one, and once the budget is spent the call asks as before. `rclass budgets check FILE` says in plain words what a file allows, and warns if you can edit it yourself. `rclass audit report` lists every call a budget let through, with its count.
+
 **For gateways that can't see arguments, export static policy.** These use each tool's worst-case class, so they are never less strict than the hook:
 
 | Format | For | Approval step |
@@ -119,7 +146,7 @@ The usual protections still apply: an `env` that changes which code runs, a laun
 rclass policy --format cedar .mcp.json --deny-from R4 > rclass.cedar
 ```
 
-Server names in the output are the names in your config; for Docker and agentgateway they must match the names the gateway registered.
+Server names in the output are the names in your config; for Docker and agentgateway they must match the names the gateway registered. Budgets need the hook, which counts calls, so static policy still asks for every R2 tool.
 
 ### Limits
 
@@ -130,6 +157,7 @@ Read these before relying on the hook as a control.
 - **If Claude Code cannot start the hook at all**, or it times out, Claude Code runs the call under your normal permission rules. The generated settings run a fixed interpreter (`python -m rclass`) with a timeout to make that unlikely. If you need a floor that holds even then, add `--format claude-settings` through managed settings; it asks for every tool whose worst case is R2 or above, so it prompts more than the hook.
 - **Records are checked against one release of each server.** A record can say which release with `server.min_version`; if your config pins an older release, or one whose version can't be read, the rules that lower a class are ignored and you get the stricter base class. Only the GitHub record sets it so far. An unpinned image or package counts as the newest release, so a stale cached image is treated as new.
 - **Your own servers need a mapping.** A server launched from an absolute path, an internal registry image, an internal npm or PyPI index, `python -m`, or a gateway URL matches no public record, so it is R4 and every call asks, until your platform team maps it (below).
+- **Budgets are counted on the developer's machine.** The count sits with the session state, so it has the same limit: an agent that can write anywhere on disk can reset it. A budget saves prompts on calls you could undo at a known cost; it is not a spending control. Put hard money limits in the service itself.
 - **MCP tools, plus `WebFetch` after a read.** The hook sees every tool so the session guard knows when data has been read, but it only decides MCP calls and `WebFetch`; other built-in tools are left to Claude Code's rules. It adds about 0.1 s to each built-in tool call and about 0.4 s to each MCP call.
 
 

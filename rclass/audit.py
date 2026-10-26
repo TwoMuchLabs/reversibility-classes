@@ -136,7 +136,8 @@ def report(entries: Iterable[Mapping[str, Any]], min_class: str = "R3") -> list[
         if e.get("event", "pre") != "pre":
             continue
         cls, decision = e.get("class") or "R4", e.get("decision")
-        if cls < min_class and decision not in ("ask", "deny"):
+        budget = e.get("budget") if isinstance(e.get("budget"), Mapping) else None
+        if cls < min_class and decision not in ("ask", "deny") and budget is None:
             continue
         tid = e.get("tool_use_id")
         executed = tid in ran if tid else None
@@ -147,10 +148,15 @@ def report(entries: Iterable[Mapping[str, Any]], min_class: str = "R3") -> list[
             approver = (e.get("user") or "the user") if mode in (None, "default", "plan") else f"{mode} mode"
             outcome = (f"approved ({approver}) and ran") if executed else \
                       ("not run (refused or cancelled)" if executed is False else "unknown (no tool_use_id)")
+        elif budget is not None:
+            used = f"call {budget.get('calls')} of {budget.get('max_calls')}"
+            outcome = (f"ran within budget '{budget.get('name')}' ({used})" if executed else
+                       f"allowed within budget '{budget.get('name')}' ({used}), did not run" if executed is False
+                       else f"allowed within budget '{budget.get('name')}' ({used})")
         else:
             outcome = "ran without an rclass prompt" if executed else ("did not run" if executed is False else "unknown")
         rows.append({"time": e.get("time"), "session": e.get("session"), "user": e.get("user"), "host": e.get("host"),
                      "action": f"{e.get('server')}/{e.get('tool')}", "class": cls, "source": e.get("source"),
                      "decision": decision, "outcome": outcome, "permission_mode": e.get("permission_mode"),
-                     "args_sha256": e.get("args_sha256")})
+                     "args_sha256": e.get("args_sha256"), **({"budget": budget.get("name")} if budget else {})})
     return rows

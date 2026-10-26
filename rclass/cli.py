@@ -293,7 +293,49 @@ def _gate_args(ns: argparse.Namespace) -> list[str]:
         out += ["--deny-from", ns.deny_from]
     for path in getattr(ns, "servers", None) or []:
         out += ["--servers", str(Path(path).expanduser().resolve())]  # the hook runs from another folder
+    for path in getattr(ns, "budgets", None) or []:
+        out += ["--budgets", str(Path(path).expanduser().resolve())]
     return out
+
+
+def _load_budgets(ns: argparse.Namespace) -> list:
+    """The platform team's R2 budgets (--budgets, RCLASS_BUDGETS, or /etc/rclass/budgets.yaml)."""
+    from . import budgets
+    try:
+        return budgets.load(budgets.default_paths(getattr(ns, "budgets", None)))
+    except budgets.BudgetError as exc:
+        raise UsageError(str(exc)) from None
+
+
+def cmd_budgets(ns: argparse.Namespace) -> int:
+    from . import budgets
+    paths = budgets.default_paths(ns.files)
+    if not paths:
+        raise UsageError("no budget file: pass one, set RCLASS_BUDGETS, or create /etc/rclass/budgets.yaml")
+    found = _load_budgets(argparse.Namespace(budgets=[str(p) for p in paths]))
+    try:
+        budgets.check(found, _registry(ns.registry, None))
+    except budgets.BudgetError as exc:
+        raise UsageError(str(exc)) from None
+    for b in found:
+        tools = ", ".join(b.tools) if b.tools else "every R2 tool"
+        calls = f"{b.max_calls} call{'s' if b.max_calls != 1 else ''}"
+        when = "per session" if b.window is None else \
+            f"{b.describe_window()} {'for each OS user' if b.scope == 'user' else 'in each session'}"
+        line = f"{b.name}: {b.server} ({tools}), {calls} {when}"
+        if b.where:
+            line += ", only when " + ", ".join(f"{k} = {v!r}" for k, v in b.where.items())
+        if b.amount:
+            caps = [f"at most {b.amount.max_each:g} each" if b.amount.max_each is not None else "",
+                    f"{b.amount.max_total:g} in all" if b.amount.max_total is not None else ""]
+            line += f", {b.amount.arg} " + " and ".join(c for c in caps if c)
+        print(line)
+    print("R3 and R4 calls are never covered by a budget; they always ask.")
+    weak = budgets.writable(paths)
+    if weak:
+        print(f"warning: you can edit {', '.join(map(str, weak))}, so an agent running as you could too. "
+              "Keep budget files where agents can't write.", file=sys.stderr)
+    return 0
 
 
 def cmd_hook(ns: argparse.Namespace) -> int:
@@ -302,6 +344,7 @@ def cmd_hook(ns: argparse.Namespace) -> int:
     from .gate import ask_on_error, run_hook, state_dir
     try:
         policy = _gate_policy(ns)
+        policy.budgets = _load_budgets(ns)
         mapping = _parse_assume(ns.map)
         log = None if ns.no_log else Path(ns.log).expanduser() if ns.log else state_dir() / "audit.jsonl"
     except Exception as exc:  # noqa: BLE001
@@ -315,6 +358,11 @@ def cmd_hook(ns: argparse.Namespace) -> int:
         bad = [r for r in mapping.values() if r not in reg.servers()]
         if bad:
             raise UsageError(f"--map names {', '.join(bad)}, which {'is' if len(bad) == 1 else 'are'} not in the registry")
+        from . import budgets
+        try:
+            budgets.check(policy.budgets, reg)
+        except budgets.BudgetError as exc:
+            raise UsageError(str(exc)) from None
         return reg
 
     return run_hook(sys.stdin, sys.stdout, policy, registry, mapping, log)
@@ -325,8 +373,12 @@ def cmd_policy(ns: argparse.Namespace) -> int:
     from . import scan as sc
     policy = _gate_policy(ns)
     if ns.format == "claude-hook":
+        _load_budgets(ns)  # fail now on a bad file, not on the first call
         text = gate.claude_hook_settings(_gate_args(ns))
     else:
+        if getattr(ns, "budgets", None):
+            print("note: budgets need the hook, which counts calls; static policy still asks for every R2 tool",
+                  file=sys.stderr)
         configs = [Path(p).expanduser() for p in ns.configs] or sc.known_config_paths()
         missing = [str(p) for p in configs if not p.is_file()]
         if missing:
@@ -468,7 +520,18 @@ def main(argv: list[str] | None = None) -> int:
                     help="server mappings recognising your own MCP servers (default: RCLASS_SERVERS, else "
                     "/etc/rclass/servers.yaml); keep the file where agents can't write")
     hk.add_argument("--override", action="append", help="deployment override record (repeatable)")
+    hk.add_argument("--budgets", action="append", metavar="FILE",
+                    help="R2 budgets: compensable calls that may run without a prompt, up to a limit (default: "
+                    "RCLASS_BUDGETS, else /etc/rclass/budgets.yaml); keep the file where agents can't write")
     hk.set_defaults(fn=cmd_hook)
+
+    bu = sub.add_parser("budgets", help="check an R2 budget file and say what it allows",
+                        description="check: validate budget files against the registry and print, in plain words, "
+                        "which R2 calls may run without a prompt and how often.")
+    bu.add_argument("action", choices=["check"])
+    bu.add_argument("files", nargs="*", help="budget files (default: RCLASS_BUDGETS, else /etc/rclass/budgets.yaml)")
+    bu.add_argument("--registry", action="append", help="extra registry path (repeatable)")
+    bu.set_defaults(fn=cmd_budgets)
 
     au = sub.add_parser("audit", help="check or summarise the hook's decision log",
                         description="verify: check the log's hash chain (exit 1 if a line was changed, removed or "
@@ -498,6 +561,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="server mappings recognising your own MCP servers (default: RCLASS_SERVERS, else "
                     "/etc/rclass/servers.yaml); keep the file where agents can't write")
     po.add_argument("--override", action="append", help="deployment override record (repeatable)")
+    po.add_argument("--budgets", action="append", metavar="FILE",
+                    help="R2 budget file passed to the generated hook (claude-hook only; repeatable)")
     po.set_defaults(fn=cmd_policy)
 
     args = sys.argv[1:] if argv is None else argv

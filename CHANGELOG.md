@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.8.0 — 2026-10-26
+
+**R2 budgets: fewer prompts for calls you can undo at a known cost.** The red team's main prompt-fatigue finding (H5): every R2 call asked, although SPEC 8 says R2 means "ask, or act within a pre-approved budget". No specification change.
+
+- **A budget file** (`rclass/budgets.py`), kept where agents can't write: `--budgets FILE` on `hook` and `policy --format claude-hook`, else `RCLASS_BUDGETS`, else `/etc/rclass/budgets.yaml`. Each budget names a registry record, optionally its tools, a call count, a window (`30m`, `12h`, `1d`, or per session), a scope (each session, or all of an OS user's sessions), exact-match argument conditions (`where`), and an optional amount limit per call and in total, read from a named argument.
+- **What a budget never covers:** R3 and R4; an unrecognised server; a call the session guard raised to R4; a server name that could be more than one record; a call whose amount argument is missing, negative or not a number. An unreadable count file allows nothing.
+- **Counted before the call runs, under a lock**, so parallel calls can't overspend. When the budget is spent, the call asks as before, and a call that asks spends nothing.
+- **The reason and the log say which budget allowed it** ("call 3 of 5 per day"). `rclass audit report` lists every call a budget allowed, whatever its class threshold, and whether it ran.
+- **`rclass budgets check FILE`** validates the file against the registry, says what it allows in plain words, and warns when you can edit the file yourself.
+- **Tested in a live Claude Code session** (2.1.310, headless): with a budget of one `create_directory` call (raised to R2 by an override for the test), the first call ran without a prompt and the second was refused with "Needs your approval". `rclass audit verify` passed and the report showed "ran within budget 'one-directory' (call 1 of 1)".
+
+**Install:** `pip install git+https://github.com/TwoMuchLabs/reversibility-classes@v0.8.0`
+
 ## v0.7.1 — 2026-10-26
 
 **Tested in a live Claude Code session** (2.1.310, headless, with the MCP tools and WebFetch pre-approved so only the hook could refuse):
