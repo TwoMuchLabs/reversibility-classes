@@ -69,15 +69,15 @@ Exit codes: `0` ok · `1` something reachable is at or above the threshold (an u
 
 ## Enforce it
 
-**In Claude Code, gate every MCP call by its class.** `rclass hook` is a [PreToolUse hook](https://code.claude.com/docs/en/hooks): Claude Code hands it each MCP tool call with its arguments, and it answers with the class of *that* call. A SELECT through `write_query` is R0; the same tool with `DROP TABLE` is R4 and asks you first, even if you allowlisted the tool.
+**In Claude Code, gate every MCP call by its class.** `rclass hook` is a [PreToolUse hook](https://code.claude.com/docs/en/hooks): Claude Code hands it each MCP tool call with its arguments, and it answers with the class of *that* call. A single `SELECT` through the Postgres server's `query` tool is R0; the same tool with `COMMIT; DROP TABLE` is R4 and asks you first, even if you allowlisted the tool.
 
 ```bash
 rclass policy --format claude-hook > hook.json   # merge into .claude/settings.json or ~/.claude/settings.json
 ```
 
 ```text
-rclass: R4 Irreversible (registry). Accepts any non-SELECT statement: UPDATE, DELETE and DROP destroy
-prior values, and even INSERT can be an upsert (…) that overwrites rows. Needs your approval.
+rclass: R4 Irreversible (registry). The SQL is run inside a read-only transaction, but the driver accepts
+several statements, so a query beginning with COMMIT; escapes it and can change or destroy data (…). Needs your approval.
 ```
 
 By default R0–R1 calls get no decision (your own permission rules apply) and R2–R4 ask, unless an R2 call is within a budget your platform team set (below). After a session has read anything, a call that can carry data to a destination the agent chooses is treated as R4 (SPEC 9), so "read the credentials file, then fetch a URL with them in it" asks before the fetch. `--allow-up-to R1` lets low classes run without a prompt and `--deny-from R4` blocks instead of asking. Every decision is logged to `~/.local/state/rclass/audit.jsonl` with its class, rule, the session's effective class, the user, host and Claude Code permission mode, and a SHA-256 digest of the arguments, never the arguments themselves (`--log FILE` to move it, `--no-log` to stop). The hook also runs after each call it decides about, so the log knows which prompts led to the call running. Servers are identified from what your Claude Code config runs, as in `rclass scan --list`, using Claude Code's project folder rather than wherever the agent has moved to. An unrecognised server or tool is R4, and so is a server whose config changes during a session. `--map NAME=RECORD` vouches for a server in your own user config; a repository's `.mcp.json` cannot use it. Any error inside the hook asks rather than allowing. A hook can only make Claude Code stricter: your own deny and ask rules still apply.
