@@ -131,6 +131,7 @@ class ServerConfig:
     project_root: str | None = None
     config_error: str | None = None
     needs: list[str] = field(default_factory=list)
+    templated: bool = False       # command, args, env or url used ${...}: what runs depends on the environment
 
     @property
     def remote(self) -> bool:
@@ -292,6 +293,7 @@ def load_config(path: Path, cwd: Path | None = None, home: Path | None = None,
             if cfg.config_error:
                 continue
             needs: list[str] = []
+            cfg.templated = "${" in json.dumps([command, list(args), env, url, wd], default=str)
             cfg.command = _expand(command, proot, needs) if command else None
             cfg.args = [_expand(str(a), proot, needs) for a in args]
             cfg.env = {str(k): _expand(str(v), proot, needs) for k, v in env.items()}

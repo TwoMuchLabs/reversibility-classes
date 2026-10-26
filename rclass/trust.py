@@ -59,9 +59,37 @@ def locked(lock_path: Path, deadline: float | None = None) -> Iterator[bool]:
             fcntl.flock(f, fcntl.LOCK_UN)
 
 
+IN_HOOK = False  # set by `rclass hook`, so a client that doesn't set CLAUDE_PROJECT_DIR is still distrusted
+
+
 def in_hook() -> bool:
-    """Claude Code sets CLAUDE_PROJECT_DIR for hooks, after a project's settings `env`."""
-    return bool(os.environ.get("CLAUDE_PROJECT_DIR"))
+    """`rclass hook` is running, or Claude Code set CLAUDE_PROJECT_DIR (it does for hooks, after a project's
+    settings `env`)."""
+    return IN_HOOK or bool(os.environ.get("CLAUDE_PROJECT_DIR"))
+
+
+def expand(path: str | Path) -> Path:
+    """`~` with the real home folder inside a hook, where `HOME` could come from a repository."""
+    s = str(path)
+    if in_hook() and (s == "~" or s.startswith("~/")):
+        return real_home() / s[2:] if len(s) > 1 else real_home()
+    return Path(s).expanduser()
+
+
+def user_name() -> str | None:
+    """The OS user. Inside a hook from the password database: `getpass.getuser()` reads USER and LOGNAME
+    first, which a repository's settings could set to put someone else's name in the audit log."""
+    if in_hook():
+        try:
+            import pwd
+            return pwd.getpwuid(os.getuid()).pw_name
+        except (ImportError, KeyError, OSError):
+            pass
+    try:
+        import getpass
+        return getpass.getuser()
+    except Exception:  # noqa: BLE001 - no user name is a fact to log, not a reason to fail
+        return None
 
 
 def env(name: str) -> str | None:
