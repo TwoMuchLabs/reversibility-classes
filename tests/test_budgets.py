@@ -523,3 +523,17 @@ def test_tilde_uses_the_real_home_inside_a_hook(project, monkeypatch):
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(proj))
     monkeypatch.setenv("HOME", str(proj))
     assert trust.expand("~/x.yaml") == trust.real_home() / "x.yaml"
+
+
+def test_generated_hook_carries_registry_and_override(tmp_path, capsys, monkeypatch):
+    rec = tmp_path / "o.yaml"
+    rec.write_text("""spec_version: '0.3'
+server: {id: sqlite, name: SQLite, source: https://example.com, evidence: [https://example.com], version: x,
+  notes: backups kept 30 days}
+tools:
+- {name: write_query, class: R3, rationale: Restorable by a DBA from backups.}
+""")
+    monkeypatch.chdir(tmp_path)
+    assert main(["policy", "--format", "claude-hook", "--override", "o.yaml", "--registry", "."]) == 0
+    cmd = json.loads(capsys.readouterr().out)["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+    assert f"--override {rec.resolve()}" in cmd and f"--registry {tmp_path.resolve()}" in cmd

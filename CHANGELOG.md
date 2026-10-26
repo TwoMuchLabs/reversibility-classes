@@ -24,6 +24,7 @@
 - **The audit log's user name comes from the system** inside a hook, not from `USER` or `LOGNAME`, which a repository's settings could set to put someone else's name on an approval. Checked live, along with `PYTHONPATH` and `HOME` set by the project.
 - **`--map` no longer vouches for an entry whose command uses `${VAR}`**, since the variable could come from a repository's settings and change what runs. `~` in hook flags expands to the real home folder. `rclass hook` distrusts the environment even when a client doesn't set `CLAUDE_PROJECT_DIR`.
 - **If you had `RCLASS_STATE_DIR` exported**, the hook now ignores it, so new decisions go to `~/.local/state/rclass` (or `--state-dir`); point `rclass audit` at the old log by path, or pass `--state-dir`. Budget counts start again once.
+- **`policy --format claude-hook` now passes `--registry` and `--override` to the hook.** It accepted them before but left them out of the generated command, so the hook ran without your overrides.
 - `rclass --version` reports the code that is running, not stale package metadata.
 
 **Install:** `pip install git+https://github.com/TwoMuchLabs/reversibility-classes@v0.8.0`
