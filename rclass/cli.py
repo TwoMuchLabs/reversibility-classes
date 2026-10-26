@@ -46,6 +46,7 @@ def _with_mappings(reg: Registry, ns: argparse.Namespace) -> Registry:
     from . import servers
     paths = servers.default_paths(getattr(ns, "servers", None))
     try:
+        servers.refuse_project_files(paths)
         reg.mappings = servers.load(paths)
         servers.check(reg.mappings, reg.servers())
     except servers.MappingError as exc:
@@ -301,8 +302,10 @@ def _gate_args(ns: argparse.Namespace) -> list[str]:
 def _load_budgets(ns: argparse.Namespace) -> list:
     """The platform team's R2 budgets (--budgets, RCLASS_BUDGETS, or /etc/rclass/budgets.yaml)."""
     from . import budgets
+    paths = budgets.default_paths(getattr(ns, "budgets", None))
     try:
-        return budgets.load(budgets.default_paths(getattr(ns, "budgets", None)))
+        budgets.refuse_project_files(paths)
+        return budgets.load(paths)
     except budgets.BudgetError as exc:
         raise UsageError(str(exc)) from None
 
@@ -373,7 +376,12 @@ def cmd_policy(ns: argparse.Namespace) -> int:
     from . import scan as sc
     policy = _gate_policy(ns)
     if ns.format == "claude-hook":
-        _load_budgets(ns)  # fail now on a bad file, not on the first call
+        # Fail now on a bad budget file, not on every MCP call once the hook is installed.
+        from . import budgets
+        try:
+            budgets.check(_load_budgets(ns), _with_mappings(_registry(ns.registry, ns.override), ns))
+        except budgets.BudgetError as exc:
+            raise UsageError(str(exc)) from None
         text = gate.claude_hook_settings(_gate_args(ns))
     else:
         if getattr(ns, "budgets", None):

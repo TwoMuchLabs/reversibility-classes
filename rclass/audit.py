@@ -78,15 +78,12 @@ def _last_hash(path: Path) -> str:
 
 def append(path: Path, entry: dict[str, Any]) -> None:
     """Add one line to the chain. Best effort: a full disk or a read-only folder never blocks a call."""
-    try:
-        import fcntl
-    except ImportError:
-        fcntl = None
+    from .trust import locked
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path.with_suffix(path.suffix + ".lock"), "a+") as lock:
-            if fcntl:
-                fcntl.flock(lock, fcntl.LOCK_EX)
+        # If someone holds the lock, write anyway rather than stall the hook: a racing line shows up in
+        # `rclass audit verify` as a fork in the chain, which is better than a missing line.
+        with locked(path.with_suffix(path.suffix + ".lock")):
             entry = dict(entry, prev=_last_hash(path))
             entry["hash"] = _line_hash(entry)
             with path.open("a", encoding="utf-8") as f:

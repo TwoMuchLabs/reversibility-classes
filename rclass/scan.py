@@ -70,12 +70,10 @@ PROJECT_CONFIG_DIRS = {".vscode", ".cursor"}
 
 
 def rclass_version() -> str:
-    try:
-        from importlib.metadata import version
-        return version("rclass")
-    except Exception:  # noqa: BLE001 - running from a source checkout
-        from . import __version__
-        return __version__
+    """The version of the code that is running. Package metadata can be stale (an older install next to a
+    source checkout, or an editable install made before a version bump), so it is not used."""
+    from . import __version__
+    return __version__
 
 
 # --------------------------------------------------------------------------- text safety

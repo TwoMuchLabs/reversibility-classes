@@ -8,7 +8,14 @@
 - **What a budget never covers:** R3 and R4; an unrecognised server; a call the session guard raised to R4; a server name that could be more than one record; a call whose amount argument is missing, negative or not a number. An unreadable count file allows nothing.
 - **Counted before the call runs, under a lock**, so parallel calls can't overspend. When the budget is spent, the call asks as before, and a call that asks spends nothing.
 - **The reason and the log say which budget allowed it** ("call 3 of 5 per day"). `rclass audit report` lists every call a budget allowed, whatever its class threshold, and whether it ran.
-- **`rclass budgets check FILE`** validates the file against the registry, says what it allows in plain words, and warns when you can edit the file yourself.
+- **`rclass budgets check FILE`** validates the file against the registry, says what it allows in plain words, and warns when you can edit the file yourself. `rclass policy --format claude-hook --budgets FILE` checks it too, so a typo fails at install time rather than making every MCP call ask.
+- **Reviewed before release** by a separate agent, which found five problems, all fixed here with a regression test each: a `NaN` amount switched off the total limit; a broader budget could pick up a call an amount-limited budget refused (now the first matching budget decides); a shell command could reset the count file without a prompt; holding a lock could stall the hook into Claude Code's timeout; and `policy --format claude-hook` didn't check the budget file.
+
+**Security fixes, also affecting v0.7.0 and earlier:**
+
+- **A repository could point the hook at its own files.** Claude Code passes a project's `.claude/settings.json` `env` to hooks (checked in a live session), so a repository could set `RCLASS_SERVERS` to a mapping it ships, or `RCLASS_STATE_DIR` to a folder inside itself. The hook now refuses a mapping or budget file inside the project folder and ignores a state folder there. `CLAUDE_PROJECT_DIR`, which the check relies on, is set by Claude Code after the settings `env`, so a repository can't move it (also checked live).
+- **No lock waits forever.** The session state and decision log locks had no deadline, so a process holding one could stall the hook until Claude Code's timeout, after which the call runs without rclass. Each lock now gives up after 2 s and takes the strict path; the log is written anyway, and a racing line shows up in `rclass audit verify`.
+- `rclass --version` reports the code that is running, not stale package metadata.
 - **Tested in a live Claude Code session** (2.1.310, headless): with a budget of one `create_directory` call (raised to R2 by an override for the test), the first call ran without a prompt and the second was refused with "Needs your approval". `rclass audit verify` passed and the report showed "ran within budget 'one-directory' (call 1 of 1)".
 
 **Install:** `pip install git+https://github.com/TwoMuchLabs/reversibility-classes@v0.8.0`

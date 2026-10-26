@@ -29,7 +29,10 @@ What a budget never does:
 - It never applies to R3 or R4. Those are approved one by one (SPEC 8).
 - It never applies to an unrecognised server, a call the session guard raised to R4, or a server name that
   could be more than one record.
-- It never applies when the amount argument is missing, not a number, or negative.
+- It never applies when the amount argument is missing, not a number (strings, NaN and infinity included), or
+  negative.
+- The first budget that matches a call (server, tool and `where`) decides it. If that budget is spent, or the
+  amount doesn't fit, the call asks; a broader budget further down never picks it up.
 
 A call within budget is allowed and its spend recorded before it runs, under a lock, so parallel calls can't
 both take the last unit. A call over budget asks, as before. Keep the budget file where agents can't write
@@ -40,6 +43,7 @@ the session state and has the same limit: an agent that can write anywhere on di
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import time
@@ -49,6 +53,7 @@ from typing import Any, Iterable, Mapping
 
 import yaml
 
+from . import trust
 from .model import RClass
 
 DEFAULT_PATH = Path("/etc/rclass/budgets.yaml")
@@ -91,24 +96,22 @@ class Budget:
 
 
 def _number(v: Any) -> float | None:
-    if isinstance(v, bool):
+    """A JSON number, finite. Strings are not amounts: "1e3", " 5" and "NaN" would all parse."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
         return None
-    if isinstance(v, (int, float)):
-        return float(v)
-    if isinstance(v, str):
-        try:
-            return float(v.strip())
-        except ValueError:
-            return None
-    return None
+    try:
+        n = float(v)
+    except OverflowError:
+        return None
+    return n if math.isfinite(n) else None
 
 
 def _limit(v: Any, where: str, key: str) -> float | None:
     if v is None:
         return None
     n = _number(v)
-    if n is None or n < 0 or isinstance(v, str):
-        raise BudgetError(f"{where}: `{key}` must be a non-negative number")
+    if n is None or n < 0:
+        raise BudgetError(f"{where}: `{key}` must be a finite, non-negative number")
     return n
 
 
@@ -186,6 +189,14 @@ def load(paths: Iterable[str | Path]) -> list[Budget]:
     return out
 
 
+def refuse_project_files(paths: Iterable[Path]) -> None:
+    bad = [str(p) for p in paths if trust.inside_project(p)]
+    if bad:
+        raise BudgetError(f"budget file {', '.join(bad)} is inside the project folder, where a repository could "
+                          "supply it (for example through RCLASS_BUDGETS in its .claude/settings.json); keep it "
+                          "where agents and repositories can't write")
+
+
 def default_paths(explicit: Iterable[str] | None = None) -> list[Path]:
     """`--budgets` files, else RCLASS_BUDGETS, else /etc/rclass/budgets.yaml if it exists."""
     if explicit:
@@ -197,7 +208,8 @@ def default_paths(explicit: Iterable[str] | None = None) -> list[Path]:
 
 
 def check(budgets: Iterable[Budget], registry) -> None:
-    """Every budget names a known record, and every listed tool exists there and can be R2."""
+    """Every budget names a known record, and every listed tool exists there. (A tool that is never R2 is
+    harmless in a budget: the budget simply never applies to it.)"""
     problems = []
     servers = set(registry.servers())
     for b in budgets:
@@ -252,6 +264,8 @@ class Ledger:
     def __init__(self, root: Path):
         self.path = root / "budgets.json"
 
+    KEEP = 30 * 86400  # per-session counts are dropped this long after their last call
+
     def try_spend(self, b: Budget, session_key: str | None, amount: float | None,
                   now: float | None = None) -> Spend | None:
         """Record this call against the budget if it fits; None if it doesn't (or can't be recorded)."""
@@ -260,14 +274,9 @@ class Ledger:
             return None
         key = b.name if b.scope == "user" else f"{b.name}@{session_key}"
         try:
-            import fcntl
-        except ImportError:
-            fcntl = None
-        try:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.path.with_suffix(".lock"), "a+") as lock:
-                if fcntl:
-                    fcntl.flock(lock, fcntl.LOCK_EX)
+            with trust.locked(self.path.with_suffix(".lock")) as ok:
+                if not ok:
+                    return None  # someone is holding the lock (or no locks on this OS): ask
                 try:
                     data = json.loads(self.path.read_text(encoding="utf-8"))
                     data = data if isinstance(data, dict) else {}
@@ -289,6 +298,9 @@ class Ledger:
                         return None
                 spent.append([now, amount])
                 data[key] = spent
+                for k in [k for k, v in data.items() if "@" in k and isinstance(v, list) and v and
+                          all(isinstance(x, list) and x and now - float(x[0]) > self.KEEP for x in v)]:
+                    del data[k]
                 tmp = self.path.with_suffix(f".{os.getpid()}.tmp")
                 tmp.write_text(json.dumps(data), encoding="utf-8")
                 tmp.replace(self.path)
@@ -309,14 +321,13 @@ def spend(budgets: Iterable[Budget], ledger: Ledger, rclass: RClass, source: str
     for b in budgets:
         if not matches(b, server, tool, args):
             continue
+        # The first matching budget decides: a broader budget below must not pick up a call this one refused.
         amount = None
         if b.amount is not None:
             amount = _number(_get(args, b.amount.arg))
             if amount is None or amount < 0:
-                continue
-        got = ledger.try_spend(b, session_key, amount)
-        if got is not None:
-            return got
+                return None
+        return ledger.try_spend(b, session_key, amount)
     return None
 
 

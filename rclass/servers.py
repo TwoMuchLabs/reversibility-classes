@@ -39,6 +39,8 @@ from typing import Any, Iterable, Mapping
 
 import yaml
 
+from . import trust
+
 DEFAULT_PATH = Path("/etc/rclass/servers.yaml")
 KINDS = ("image", "command", "package", "module", "url")
 
@@ -116,6 +118,14 @@ def default_paths(explicit: Iterable[str] | None = None) -> list[Path]:
     if env:
         return [Path(p) for p in env.split(os.pathsep) if p]
     return [DEFAULT_PATH] if DEFAULT_PATH.is_file() else []
+
+
+def refuse_project_files(paths: Iterable[Path]) -> None:
+    bad = [str(p) for p in paths if trust.inside_project(p)]
+    if bad:
+        raise MappingError(f"server mapping file {', '.join(bad)} is inside the project folder, where a repository "
+                           "could supply it (for example through RCLASS_SERVERS in its .claude/settings.json); keep "
+                           "it where agents and repositories can't write")
 
 
 def check(mappings: Iterable[ServerMapping], records: Iterable[str]) -> None:

@@ -144,8 +144,14 @@ def project_dir(event: Mapping[str, Any]) -> Path:
 # --------------------------------------------------------------------------- session state
 
 def state_dir() -> Path:
-    base = os.environ.get("RCLASS_STATE_DIR") or os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local/state")
-    return Path(base) / "rclass"
+    """RCLASS_STATE_DIR, else XDG_STATE_HOME, else ~/.local/state. A folder inside the project is ignored: a
+    repository can set these through its own settings (rclass/trust.py), and would then hold the hook's
+    state, budget counts and decision log."""
+    from .trust import inside_project
+    for base in (os.environ.get("RCLASS_STATE_DIR"), os.environ.get("XDG_STATE_HOME")):
+        if base and not inside_project(Path(base)):
+            return Path(base) / "rclass"
+    return Path.home() / ".local/state" / "rclass"
 
 
 class SessionState:
@@ -214,15 +220,13 @@ class SessionState:
         turns on, the effective class only rises, and the first fingerprint seen for a name stays."""
         if self.path is None:
             return
-        try:
-            import fcntl
-        except ImportError:  # Windows: no advisory lock; last writer wins
-            fcntl = None
+        from .trust import locked
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.path.with_suffix(".lock"), "a+") as lock:
-                if fcntl:
-                    fcntl.flock(lock, fcntl.LOCK_EX)
+            with locked(self.path.with_suffix(".lock")) as ok:
+                if not ok and os.name != "nt":
+                    self.degraded = True  # someone is holding the lock: don't wait, assume the session has read
+                    return
                 try:
                     disk = json.loads(self.path.read_text(encoding="utf-8"))
                     disk = disk if isinstance(disk, dict) else {}
@@ -404,7 +408,8 @@ def touches_guard(tool_name: str, args: Mapping[str, Any] | None) -> bool:
     if tool_name not in _WRITERS:
         return False
     text = " ".join(_strings(args)).lower()
-    marks = [str(state_dir()).lower(), "rclass/sessions", "rclass/audit", ".claude/settings", "managed-settings"]
+    marks = [str(state_dir()).lower(), "rclass/sessions", "rclass/audit", "rclass/budgets", ".claude/settings",
+             "managed-settings"]
     return any(m in text for m in marks)
 
 

@@ -266,3 +266,127 @@ def test_env_default_path(tmp_path, monkeypatch):
     f.write_text(TABLES)
     monkeypatch.setenv("RCLASS_BUDGETS", str(f))
     assert [b.name for b in budgets.load(budgets.default_paths())] == ["tables"]
+
+
+# --------------------------------------------------------------------------- review findings (each one a regression test)
+
+@pytest.mark.parametrize("cost", [float("nan"), float("inf"), "nan", "1e3", "50", " 5", 10**400])
+def test_amount_must_be_a_finite_json_number(project, cost):
+    out = hook(project, "mcp__db__append_insight", {"topic": "sales", "meta": {"cost": cost}}, policy(AMOUNTS))
+    assert out["permissionDecision"] == "ask"
+
+
+def test_nan_cannot_disable_the_total(project):
+    p = policy(AMOUNTS)
+    hook(project, "mcp__db__append_insight", {"topic": "sales", "meta": {"cost": float("nan")}}, p)
+    ok = [hook(project, "mcp__db__append_insight", {"topic": "sales", "meta": {"cost": 40}}, p)["permissionDecision"]
+          for _ in range(3)]
+    assert ok == ["allow", "allow", "ask"]  # 80 is the total
+
+
+@pytest.mark.parametrize("limit", [".nan", ".inf"])
+def test_non_finite_limits_are_rejected(limit):
+    with pytest.raises(budgets.BudgetError, match="finite"):
+        policy(f"budgets:\n  - {{name: a, server: sqlite, max_calls: 1, amount: {{arg: x, max_each: {limit}}}}}\n")
+
+
+def test_first_matching_budget_decides(project):
+    p = policy(AMOUNTS + "  - {name: any-r2, server: sqlite, max_calls: 100}\n")
+    call = lambda args: hook(project, "mcp__db__append_insight", args, p)  # noqa: E731
+    assert call({"topic": "sales", "meta": {"cost": 10**6}})["permissionDecision"] == "ask"
+    assert call({"topic": "sales"})["permissionDecision"] == "ask"
+    out = call({"topic": "hr"})  # doesn't match the amount budget's `where`, so the broad one applies
+    assert out["permissionDecision"] == "allow" and "'any-r2'" in out["permissionDecisionReason"]
+
+
+@pytest.mark.parametrize("cmd", ["rm -f ~/.local/state/rclass/budgets.json", "echo '{}' > $HOME/.local/state/rclass/budgets.json",
+                                 "flock ~/.local/state/rclass/budgets.lock sleep 600 &"])
+def test_ledger_is_guarded(cmd):
+    assert gate.touches_guard("Bash", {"command": cmd})
+
+
+def _hold(lock_path, held, release):
+    import fcntl
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "a+") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        held.set()
+        release.wait(10)
+
+
+@pytest.mark.parametrize("which", ["budgets.lock", "sessions"])
+def test_a_held_lock_never_stalls_the_hook(project, tmp_path, which):
+    pytest.importorskip("fcntl")
+    import time
+    p = policy(TABLES)
+    hook(project, "mcp__db__list_tables", {}, p)  # creates the session file
+    root = tmp_path / "state" / "rclass"
+    lock = root / "budgets.lock" if which == "budgets.lock" else next((root / "sessions").glob("*.lock"))
+    held, release = threading.Event(), threading.Event()
+    t = threading.Thread(target=_hold, args=(lock, held, release))
+    t.start()
+    held.wait(5)
+    try:
+        start = time.monotonic()
+        out = hook(project, "mcp__db__create_table", {}, p)
+        assert time.monotonic() - start < 10
+        if which == "budgets.lock":
+            assert out["permissionDecision"] == "ask"  # no budget without the lock
+    finally:
+        release.set()
+        t.join()
+
+
+def test_policy_claude_hook_checks_budgets_against_the_registry(tmp_path, capsys):
+    f = tmp_path / "b.yaml"
+    f.write_text("budgets:\n  - {name: typo, server: sqlitee, max_calls: 1}\n")
+    assert main(["policy", "--format", "claude-hook", "--budgets", str(f)]) == 2
+    assert "sqlitee" in capsys.readouterr().err
+
+
+def test_ledger_drops_old_session_counts(tmp_path):
+    b = budgets.parse({"budgets": [{"name": "t", "server": "sqlite", "max_calls": 9}]}, "<t>")[0]
+    led = budgets.Ledger(tmp_path)
+    led.try_spend(b, "old", None, now=0.0)
+    led.try_spend(b, "new", None, now=budgets.Ledger.KEEP + 10)
+    assert list(json.loads((tmp_path / "budgets.json").read_text())) == ["t@new"]
+
+
+# --------------------------------------------------------------------------- files a repository could name
+
+def test_repository_cannot_supply_a_budget_file(project, monkeypatch, capsys):
+    proj, _ = project
+    (proj / "b.yaml").write_text(TABLES)
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(proj))
+    monkeypatch.setenv("RCLASS_BUDGETS", str(proj / "b.yaml"))  # as a repo's .claude/settings.json `env` could
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(
+        {"session_id": "s", "cwd": str(proj), "hook_event_name": "PreToolUse", "tool_name": "mcp__db__create_table"})))
+    assert main(["hook", "claude-code", "--no-log"]) == 0
+    out = json.loads(capsys.readouterr().out)["hookSpecificOutput"]
+    assert out["permissionDecision"] == "ask" and "misconfigured" in out["permissionDecisionReason"]
+    with pytest.raises(budgets.BudgetError, match="inside the project folder"):
+        budgets.refuse_project_files(budgets.default_paths())
+
+
+def test_repository_cannot_supply_a_server_mapping(project, monkeypatch):
+    from rclass import servers
+    proj, _ = project
+    (proj / "m.yaml").write_text("servers: []\n")
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(proj))
+    monkeypatch.setenv("RCLASS_SERVERS", str(proj / "sub" / ".." / "m.yaml"))
+    with pytest.raises(servers.MappingError, match="inside the project folder"):
+        servers.refuse_project_files(servers.default_paths())
+
+
+def test_repository_cannot_move_the_state_folder(project, monkeypatch, tmp_path):
+    proj, _ = project
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(proj))
+    monkeypatch.setenv("RCLASS_STATE_DIR", str(proj / ".state"))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg"))
+    assert gate.state_dir() == tmp_path / "xdg" / "rclass"
+
+
+def test_outside_a_hook_nothing_is_refused(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "b.yaml").write_text(TABLES)
+    budgets.refuse_project_files([tmp_path / "b.yaml"])  # no CLAUDE_PROJECT_DIR: a person running rclass
