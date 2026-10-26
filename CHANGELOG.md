@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.7.1 — 2026-10-26
+
+**Tested in a live Claude Code session** (2.1.310, headless, with the MCP tools and WebFetch pre-approved so only the hook could refuse):
+
+- `write_file` overwriting a file was refused with the hook's "R4 Irreversible (registry)" reason, and the file was unchanged.
+- WebFetch after the session had read a file was refused with the session-guard reason.
+- WebFetch with no earlier read went through.
+- `rclass audit verify` passed on the resulting log, and `rclass audit report` showed each refusal as "not run".
+
+**Fixed, found by that run:** Claude Code starts a session with `ToolSearch` (loading deferred tool definitions), and the session guard counted it as a read, so every WebFetch asked from the first call on. `ToolSearch`, `TodoWrite`, the task tools and plan mode no longer count as reads.
+
+**Found, not fixed:** the archived SQLite reference server (`mcp-server-sqlite`) no longer starts with the current MCP Python SDK (`AttributeError: 'Server' object has no attribute 'list_resources'`). Its record stays, for deployments that still pin an older release.
+
+**Install:** `pip install git+https://github.com/TwoMuchLabs/reversibility-classes@v0.7.1`
+
 ## v0.7.0 — 2026-10-25
 
 **Recognise your own servers.**

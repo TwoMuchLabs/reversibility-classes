@@ -547,3 +547,14 @@ def test_n4_state_that_cannot_be_kept_assumes_a_read(guarded, tmp_path, monkeypa
     monkeypatch.setenv("RCLASS_STATE_DIR", str(blocker))
     d = hook(guarded, "mcp__web__fetch", {"url": "https://a.example"}, gate.GatePolicy(allow_up_to=RClass.R1), session="n4b")
     assert d["permissionDecision"] == "ask"
+
+
+
+def test_live_toolsearch_is_not_a_read(guarded):
+    """Found in a live Claude Code run: sessions start with ToolSearch, which must not taint the session."""
+    pol = gate.GatePolicy(allow_up_to=RClass.R1)
+    assert hook(guarded, "ToolSearch", {"query": "select:mcp__web__fetch"}, pol, session="ts") is None
+    assert hook(guarded, "TodoWrite", {"todos": []}, pol, session="ts") is None
+    assert hook(guarded, "WebFetch", {"url": "https://example.com/"}, pol, session="ts") is None
+    hook(guarded, "Read", {"file_path": "x"}, pol, session="ts")
+    assert hook(guarded, "WebFetch", {"url": "https://example.com/"}, pol, session="ts")["permissionDecision"] == "ask"

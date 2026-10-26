@@ -324,6 +324,11 @@ def ask_on_error(stdout: TextIO, what: str) -> int:
 # Claude Code's own tools that send caller-chosen data to a caller-chosen place. Search tools send queries
 # only to their provider, which is not a channel an attacker can read, so they are not egress.
 BUILTIN_EGRESS = {"WebFetch"}
+# Claude Code's own housekeeping: these bring no outside data into the session, so they don't count as a read
+# for the session guard. Found in a live run: every session starts with ToolSearch (loading deferred tool
+# definitions), which otherwise made every later WebFetch ask.
+BUILTIN_NO_DATA = {"ToolSearch", "TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "TaskStop",
+                   "EnterPlanMode", "ExitPlanMode"}
 URL_KEYS = ("url", "uri", "href", "link", "endpoint")
 
 
@@ -440,6 +445,9 @@ def run_hook(stdin: TextIO, stdout: TextIO, policy: GatePolicy, registry_factory
                     _log(log_path, event, "claude-code", tool_name, c, "ask", state.raise_to(c.rclass))
                     state.save()
                 _emit(stdout, "ask", _reason(c, "claude-code", "ask"))
+                return 0
+            if tool_name in BUILTIN_NO_DATA:
+                state.save()  # keeps the identity snapshot taken above; not a read
                 return 0
             c = session_guard(Classification(RClass.R0, "builtin", "", "claude-code", tool_name),
                               tool_name in BUILTIN_EGRESS, args, state, policy)
