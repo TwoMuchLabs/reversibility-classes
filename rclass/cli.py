@@ -431,6 +431,8 @@ def cmd_audit(ns: argparse.Namespace) -> int:
     path = Path(ns.log).expanduser() if ns.log else state_dir() / "audit.jsonl"
     if not path.is_file():
         raise UsageError(f"no decision log at {path}")
+    if ns.action == "export":
+        return _audit_export(ns, path)
     if ns.action == "verify":
         n, problems = audit.verify(path)
         for line, what in problems:
@@ -447,6 +449,38 @@ def cmd_audit(ns: argparse.Namespace) -> int:
     for r in rows:
         print(f"{r['time']}  {r['class']}  {r['action']}  {r['decision']}: {r['outcome']}"
               f"  (session {str(r['session'])[:8]}, {r['user']}@{r['host']})")
+    return 0
+
+
+def _audit_export(ns: argparse.Namespace, path: Path) -> int:
+    from . import otel
+    from .scan import rclass_version
+    cursor_path = Path(ns.cursor).expanduser() if ns.cursor else None
+    lines = otel.after(otel.checked(path), otel.read_cursor(cursor_path))
+    broken = sum(1 for _, ok in lines if not ok)
+    try:
+        url = otel.endpoint_from_env(ns.endpoint)
+        headers = otel.headers_from_env(ns.header or ())
+        sent = 0
+        out = open(ns.out, "a", encoding="utf-8") if ns.out and not url else None  # noqa: SIM115
+        try:
+            for payload, last in otel.batches(lines, rclass_version()):
+                if url:
+                    otel.post(url, payload, headers, ns.timeout)
+                else:
+                    (out or sys.stdout).write(json.dumps(payload, separators=(",", ":")) + "\n")
+                    if out:
+                        out.flush()
+                sent += len(payload["resourceLogs"][0]["scopeLogs"][0]["logRecords"])
+                otel.write_cursor(cursor_path, last)  # only after the batch was accepted
+        finally:
+            if out:
+                out.close()
+    except otel.ExportError as exc:
+        raise UsageError(str(exc)) from None
+    where = url or ns.out or "stdout"
+    print(f"exported {sent} record(s) to {where}" +
+          (f"; {broken} failed the hash-chain check (rclass.chain.ok = false)" if broken else ""), file=sys.stderr)
     return 0
 
 
@@ -556,11 +590,22 @@ def main(argv: list[str] | None = None) -> int:
     au = sub.add_parser("audit", help="check or summarise the hook's decision log",
                         description="verify: check the log's hash chain (exit 1 if a line was changed, removed or "
                         "reordered). report: every decision at --min-class or above, or that asked or blocked, "
-                        "with what happened next (approved and ran, refused, blocked).")
-    au.add_argument("action", choices=["verify", "report"])
+                        "with what happened next (approved and ran, refused, blocked). export: the log as "
+                        "OpenTelemetry log records (OTLP/JSON), to a file the Collector's otlp_json_file receiver "
+                        "reads, or POSTed to a collector's /v1/logs.")
+    au.add_argument("action", choices=["verify", "report", "export"])
     au.add_argument("log", nargs="?", help="decision log (default: ~/.local/state/rclass/audit.jsonl)")
     au.add_argument("--min-class", type=str.upper, choices=classes, default="R3")
     au.add_argument("--json", action="store_true")
+    au.add_argument("--out", metavar="FILE", help="export: append OTLP/JSON lines to this file (default: stdout)")
+    au.add_argument("--endpoint", metavar="URL", help="export: POST to this OTLP/HTTP collector (/v1/logs is added); "
+                    "default: OTEL_EXPORTER_OTLP_LOGS_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT")
+    au.add_argument("--header", action="append", metavar="NAME=VALUE",
+                    help="export: an HTTP header for the collector (repeatable); prefer OTEL_EXPORTER_OTLP_HEADERS "
+                    "for credentials")
+    au.add_argument("--cursor", metavar="FILE", help="export: start after the line recorded here, and record the "
+                    "last line sent, so repeated runs send only new lines")
+    au.add_argument("--timeout", type=float, default=10.0, help="export: seconds per request (default 10)")
     au.set_defaults(fn=cmd_audit)
 
     po = sub.add_parser("policy", help="write enforceable policy for a client or gateway from your MCP config",

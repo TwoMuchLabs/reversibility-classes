@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "rclass"
-version = "0.8.0"
+version = "0.9.0"
 description = "Reversibility Classes (R0-R4) for AI agent tool calls: spec, open registry and reference classifier"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -21,7 +21,7 @@ classifiers = [
 dependencies = ["pyyaml>=6", "jsonschema>=4.18"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.6"]
+dev = ["pytest>=8", "ruff>=0.6", "opentelemetry-proto>=1.35"]  # checks the OTLP export; 1.35 adds LogRecord.event_name
 
 [project.scripts]
 rclass = "rclass.cli:main"
