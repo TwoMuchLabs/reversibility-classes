@@ -146,7 +146,7 @@ Browse the whole registry: **[reversibility.twomuchlabs.com](https://reversibili
 ## The registry
 
 <!-- registry-stats:start -->
-**20 servers, 536 tools classified.** Counts are base classes; some tools drop to a lower class for specific arguments.
+**21 servers, 589 tools classified.** Counts are base classes; some tools drop to a lower class for specific arguments.
 
 | Server | Tools | R0 | R1 | R2 | R3 | R4 |
 |---|---|---|---|---|---|---|
@@ -162,6 +162,7 @@ Browse the whole registry: **[reversibility.twomuchlabs.com](https://reversibili
 | [Playwright MCP (Microsoft)](registry/playwright.yaml) | 72 | 29 | 5 | · | 12 | 26 |
 | [PostgreSQL (archived MCP reference server)](registry/postgres.yaml) | 1 | · | · | · | · | 1 |
 | [Puppeteer (archived MCP reference server)](registry/puppeteer.yaml) | 7 | 2 | · | · | · | 5 |
+| [Redis MCP Server (official)](registry/redis.yaml) | 53 | 24 | 2 | 1 | 3 | 23 |
 | [Sentry (official MCP server)](registry/sentry.yaml) | 76 | 52 | 2 | 6 | 5 | 11 |
 | [Sequential Thinking (MCP reference server)](registry/sequentialthinking.yaml) | 1 | 1 | · | · | · | · |
 | [Slack (archived MCP reference server)](registry/slack.yaml) | 8 | 5 | · | · | · | 3 |
@@ -170,7 +171,7 @@ Browse the whole registry: **[reversibility.twomuchlabs.com](https://reversibili
 | [Supabase (official MCP server)](registry/supabase.yaml) | 40 | 23 | 1 | 2 | 4 | 10 |
 | [Terraform (HashiCorp MCP server)](registry/terraform.yaml) | 61 | 39 | 8 | 1 | 8 | 5 |
 | [Time (MCP reference server)](registry/time.yaml) | 2 | 2 | · | · | · | · |
-| **Total** | **536** | **333** | **31** | **18** | **39** | **115** |
+| **Total** | **589** | **357** | **33** | **19** | **42** | **138** |
 <!-- registry-stats:end -->
 
 Every record links to the exact README or source file the tool names were verified against. Every class carries a one-sentence rationale. Entries start as `draft` and become `reviewed` or `verified` as people check them; see [CONTRIBUTING.md](CONTRIBUTING.md).
