@@ -89,6 +89,17 @@ By default R0–R1 calls get no decision (your own permission rules apply) and R
 2026-10-25T13:04:40+00:00  R4  web/fetch  ask: not run (refused or cancelled)  (session 3f2a9c1e, alex@laptop)
 ```
 
+**Send it to your observability stack.** `rclass audit export` turns the log into OpenTelemetry log records, using the GenAI and MCP semantic conventions where they have a name (`gen_ai.tool.name`, `gen_ai.tool.call.id`, `gen_ai.conversation.id`, `mcp.method.name`) and `rclass.*` for the rest: class, rule, decision, budget, argument digest, and whether the line passed the hash-chain check.
+
+```bash
+# POST to a collector's OTLP/HTTP endpoint; only lines not sent before
+OTEL_EXPORTER_OTLP_ENDPOINT=https://otel.corp.example:4318 rclass audit export --cursor ~/.local/state/rclass/otel.cursor
+# or append to a file the Collector's otlp_json_file receiver reads
+rclass audit export --out /var/log/rclass/otlp.jsonl --cursor ~/.local/state/rclass/otel.cursor
+```
+
+Run it from cron or a systemd timer. The cursor moves only after the collector accepts a batch, so a failed run sends the same lines again. Credentials go in `OTEL_EXPORTER_OTLP_HEADERS`, as for any OTLP exporter. The GenAI and MCP conventions are still marked Development upstream, so attribute names may change.
+
 **Recognise your own servers.** A server mapping file, kept where agents and repositories can't write (`/etc/rclass/servers.yaml` by default, or `RCLASS_SERVERS`, or `--servers FILE`), says which of your launchers, mirrored images, internal packages or gateway URLs runs which registry record. The record can be public or your own (`--registry`).
 
 ```yaml

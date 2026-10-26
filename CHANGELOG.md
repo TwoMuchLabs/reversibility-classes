@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.9.0 — 2026-10-26
+
+**Send the decision log to OpenTelemetry.** The last part of the red team's audit finding (H8): the log had no OTel or SIEM output. No specification change.
+
+- **`rclass audit export`** turns each log line into an OTLP log record: JSON Lines of `LogsData` (`--out FILE`, or stdout), which the Collector's `otlp_json_file` receiver reads, or OTLP/HTTP JSON POSTed to a collector (`--endpoint URL`, or `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` / `OTEL_EXPORTER_OTLP_ENDPOINT`, with `/v1/logs` added to the latter). Headers come from `OTEL_EXPORTER_OTLP_HEADERS`, or `--header NAME=VALUE`.
+- **Incremental:** `--cursor FILE` keeps the hash of the last line sent and starts after it next time. It moves only after the collector accepts a batch; a collector that reports rejected records counts as a failure. A cursor that isn't in the log (rotated or rewritten) sends everything.
+- **Attributes:** `gen_ai.operation.name` (`execute_tool`), `gen_ai.tool.name` (as Claude Code names the tool, so decisions and outcomes join), `gen_ai.tool.call.id`, `gen_ai.conversation.id`, `mcp.method.name` (`tools/call`), `user.name`, `host.name`, and `rclass.*` for the class, source, rule, effective class, decision, permission mode, argument digest, override reason and budget. The GenAI and MCP conventions are still marked Development upstream.
+- **Tamper evidence travels with it:** every record carries `rclass.chain.ok`. A line that fails the hash-chain check, or follows a gap, is exported with `rclass.chain.ok = false` and severity WARN, and the command says how many there were. Arguments are never exported, only their digest.
+- **Tested:** the output parses with the official OTLP protobuf definitions (`opentelemetry-proto` 1.35 or later, now a dev dependency, so CI checks it), and POSTing was tested against a local HTTP server, including failures. It has not yet been run against a real OpenTelemetry Collector.
+
+**Install:** `pip install git+https://github.com/TwoMuchLabs/reversibility-classes@v0.9.0`
+
 ## v0.8.0 — 2026-10-26
 
 **R2 budgets: fewer prompts for calls you can undo at a known cost.** The red team's main prompt-fatigue finding (H5): every R2 call asked, although SPEC 8 says R2 means "ask, or act within a pre-approved budget". No specification change.
