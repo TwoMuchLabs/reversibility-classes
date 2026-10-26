@@ -26,6 +26,7 @@
 - **If you had `RCLASS_STATE_DIR` exported**, the hook now ignores it, so new decisions go to `~/.local/state/rclass` (or `--state-dir`); point `rclass audit` at the old log by path, or pass `--state-dir`. Budget counts start again once.
 - **`policy --format claude-hook` now passes `--registry` and `--override` to the hook.** It accepted them before but left them out of the generated command, so the hook ran without your overrides.
 - `rclass --version` reports the code that is running, not stale package metadata.
+- README: the per-call example now uses Postgres `query` (a single `SELECT` is R0). It used SQLite `write_query`, which has no such rule.
 
 **Install:** `pip install git+https://github.com/TwoMuchLabs/reversibility-classes@v0.8.0`
 
