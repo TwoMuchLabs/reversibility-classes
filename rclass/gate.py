@@ -143,15 +143,22 @@ def project_dir(event: Mapping[str, Any]) -> Path:
 
 # --------------------------------------------------------------------------- session state
 
+STATE_DIR: Path | None = None  # `--state-dir`, set by the hook command
+
+
 def state_dir() -> Path:
-    """RCLASS_STATE_DIR, else XDG_STATE_HOME, else ~/.local/state. A folder inside the project is ignored: a
-    repository can set these through its own settings (rclass/trust.py), and would then hold the hook's
-    state, budget counts and decision log."""
-    from .trust import inside_project
-    for base in (os.environ.get("RCLASS_STATE_DIR"), os.environ.get("XDG_STATE_HOME")):
-        if base and not inside_project(Path(base)):
+    """`--state-dir`, else RCLASS_STATE_DIR, else XDG_STATE_HOME, else ~/.local/state. Inside a hook the
+    variables are ignored and the home folder comes from the password database: a repository can set either
+    through its own settings (rclass/trust.py), and would then choose where the hook keeps its state, budget
+    counts and decision log."""
+    from . import trust
+    if STATE_DIR is not None:
+        return STATE_DIR
+    for name in ("RCLASS_STATE_DIR", "XDG_STATE_HOME"):
+        base = trust.env(name)
+        if base:
             return Path(base) / "rclass"
-    return Path.home() / ".local/state" / "rclass"
+    return (trust.real_home() if trust.in_hook() else Path.home()) / ".local/state" / "rclass"
 
 
 class SessionState:
@@ -225,8 +232,11 @@ class SessionState:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             with locked(self.path.with_suffix(".lock")) as ok:
                 if not ok and os.name != "nt":
-                    self.degraded = True  # someone is holding the lock: don't wait, assume the session has read
-                    return
+                    # Someone is holding the lock. Don't wait, but don't lose what this call learnt either: the
+                    # merge below only ever turns `read` on and raises the class, so writing it unlocked can
+                    # make a racing call stricter, never looser.
+                    self.degraded = True
+                    self.data["read"] = True
                 try:
                     disk = json.loads(self.path.read_text(encoding="utf-8"))
                     disk = disk if isinstance(disk, dict) else {}
@@ -257,6 +267,13 @@ def _transcript_has_tool_use(path: str | None) -> bool:
             return any(b'"tool_use"' in line for line in f)
     except OSError:
         return False
+
+
+def _home() -> Path:
+    """Where the user's own `~/.claude.json` is. Not `HOME`, which a repository's settings could point at
+    itself so that its own `.claude.json` counted as the user's config."""
+    from .trust import real_home
+    return real_home()
 
 
 def claude_name(server: str) -> str:
@@ -439,7 +456,7 @@ def run_hook(stdin: TextIO, stdout: TextIO, policy: GatePolicy, registry_factory
             if not state.data.get("snapshot"):
                 # Fingerprint every server at the session's first tool call, before the agent can edit configs.
                 cwd = project_dir(event)
-                home = home or Path.home()
+                home = home or _home()
                 state.check_identity({}, config_fingerprints(claude_code_configs(cwd, home), cwd, home))
                 state.data["snapshot"] = True
             if touches_guard(tool_name, args):
@@ -466,7 +483,7 @@ def run_hook(stdin: TextIO, stdout: TextIO, policy: GatePolicy, registry_factory
                 _emit(stdout, decision or "ask", _reason(c, "claude-code", decision or "ask"))
             return 0
         cwd = project_dir(event)
-        home = home or Path.home()
+        home = home or _home()
         registry = registry_factory()
         fps: dict[str, str] = {}
         records = server_records(claude_code_configs(cwd, home), registry, cwd, home, mapping, fps)
@@ -640,11 +657,13 @@ def claude_hook_settings(extra_args: list[str], python: str | None = None) -> st
     # `python -m` puts the current folder first on sys.path, and Claude Code runs hooks in the project
     # folder, so a repository shipping its own `rclass/` package would run instead. -P (Python 3.11+)
     # leaves the current folder out; older versions drop it before importing.
+    # -I as well: a repository's settings `env` reaches hooks, and PYTHONPATH there would load its own `rclass`.
+    # -I also drops user site-packages, so the folder rclass is installed in is put back explicitly, fixed now.
     py = python or sys.executable
-    if sys.version_info >= (3, 11):
-        argv = [py, "-P", "-m", "rclass"]
-    else:
-        argv = [py, "-c", "import sys; del sys.path[0]; from rclass.cli import main; sys.exit(main())"]
+    site = str(Path(__file__).resolve().parent.parent)
+    boot = (f"import sys; sys.path[:] = [p for p in sys.path if p not in ('', '.')]; sys.path.insert(0, {site!r}); "
+            "from rclass.cli import main; sys.exit(main())")
+    argv = [py, "-I", "-c", boot]
     command = " ".join(shlex.quote(a) for a in [*argv, "hook", "claude-code", *extra_args])
     # Every tool, not only MCP ones: the session guard must see Read, Bash and the like to know the session
     # has read data. Non-MCP calls get no decision, except WebFetch after a read.

@@ -7,10 +7,19 @@ the call under its normal permission rules, without rclass. `locked()` gives up 
 caller then takes the strict path: no budget, assume the session has read data, or log without the lock.
 
 **Not from the project.** Claude Code passes the `env` of a project's own `.claude/settings.json` to hooks
-(checked in a live session), so a repository can set `RCLASS_SERVERS`, `RCLASS_BUDGETS` or `RCLASS_STATE_DIR`.
-A file those name that sits inside the project folder is refused; a state folder inside it is ignored.
-`CLAUDE_PROJECT_DIR` itself is set by Claude Code after the settings `env` is applied, so a repository can't
-move it (also checked live).
+(checked in a live session), so inside a hook every environment variable is something a repository could
+have set. The hook therefore:
+- runs Python with `-I`, so `PYTHONPATH`, `PYTHONHOME`, user site-packages and the current folder can't
+  replace rclass (`claude_hook_settings`);
+- ignores `RCLASS_SERVERS`, `RCLASS_BUDGETS`, `RCLASS_STATE_DIR` and `XDG_STATE_HOME`: the generated hook
+  settings carry `--servers`, `--budgets` and `--state-dir` as flags instead;
+- takes the home folder from the password database, not `HOME`;
+- still refuses a mapping or budget file inside the project folder, in case a flag names one.
+
+`CLAUDE_PROJECT_DIR` is set by Claude Code after the settings `env` is applied, so a repository can't move it
+(also checked live); its presence is how rclass knows it is running as a hook. What no hook can defend
+against is a variable that changes how the interpreter itself loads (`LD_PRELOAD`): enforce at a gateway the
+agent can't reach where that matters.
 """
 
 from __future__ import annotations
@@ -50,6 +59,25 @@ def locked(lock_path: Path, deadline: float | None = None) -> Iterator[bool]:
             fcntl.flock(f, fcntl.LOCK_UN)
 
 
+def in_hook() -> bool:
+    """Claude Code sets CLAUDE_PROJECT_DIR for hooks, after a project's settings `env`."""
+    return bool(os.environ.get("CLAUDE_PROJECT_DIR"))
+
+
+def env(name: str) -> str | None:
+    """An environment variable rclass may trust: none inside a hook, where a repository could set it."""
+    return None if in_hook() else os.environ.get(name)
+
+
+def real_home() -> Path:
+    """The user's home folder from the password database; `HOME` is a variable a repository could set."""
+    try:
+        import pwd
+        return Path(pwd.getpwuid(os.getuid()).pw_dir)
+    except (ImportError, KeyError, OSError):
+        return Path.home()
+
+
 def project_root() -> Path | None:
     """The project Claude Code runs in: CLAUDE_PROJECT_DIR, which Claude Code sets for hooks. Outside a hook
     (a person running `rclass scan` from their home folder) there is no project to distrust."""
@@ -68,4 +96,13 @@ def inside_project(path: Path) -> bool:
         resolved = Path(path).expanduser().resolve()
     except OSError:
         return True  # can't tell: treat as untrusted
-    return resolved == root or root in resolved.parents
+    if resolved == root or root in resolved.parents:
+        return True
+    # A case-insensitive filesystem (macOS, Windows) can spell the same folder differently: compare by identity.
+    for p in (resolved, *resolved.parents):
+        try:
+            if p.exists() and os.path.samefile(p, root):
+                return True
+        except OSError:
+            return True
+    return False

@@ -191,8 +191,8 @@ def test_claude_hook_settings_carry_the_policy(capsys):
     import shlex
     import sys
     cmd = shlex.split(cfg["hooks"][0]["command"])
-    head = [sys.executable, "-P", "-m", "rclass"] if sys.version_info >= (3, 11) else cmd[:3]
-    assert cmd == [*head, "hook", "claude-code", "--deny-from", "R4"]
+    assert cmd[:3] == [sys.executable, "-I", "-c"]  # -I: a repository's settings env can't set PYTHONPATH
+    assert cmd[4:] == ["hook", "claude-code", "--deny-from", "R4"]
     assert cfg["hooks"][0]["timeout"] == 30
 
 
@@ -456,7 +456,7 @@ def test_n4_unwritable_state_assumes_a_read(guarded, tmp_path, monkeypatch):
     ro.mkdir()
     (ro / "rclass" / "sessions").mkdir(parents=True)
     (ro / "rclass" / "sessions").chmod(0o500)
-    monkeypatch.setenv("RCLASS_STATE_DIR", str(ro))
+    monkeypatch.setattr(gate, "STATE_DIR", ro / "rclass")
     import os
     if os.access(ro / "rclass" / "sessions", os.W_OK):
         pytest.skip("running as a user who can write anywhere")
@@ -544,7 +544,7 @@ def test_bad_hook_flags_ask_instead_of_blocking_every_tool(capsys, monkeypatch):
 def test_n4_state_that_cannot_be_kept_assumes_a_read(guarded, tmp_path, monkeypatch):
     blocker = tmp_path / "not-a-dir"
     blocker.write_text("x")  # the state folder cannot be created under a file, even as root
-    monkeypatch.setenv("RCLASS_STATE_DIR", str(blocker))
+    monkeypatch.setattr(gate, "STATE_DIR", blocker / "rclass")
     d = hook(guarded, "mcp__web__fetch", {"url": "https://a.example"}, gate.GatePolicy(allow_up_to=RClass.R1), session="n4b")
     assert d["permissionDecision"] == "ask"
 

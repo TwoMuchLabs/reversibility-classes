@@ -201,7 +201,7 @@ def default_paths(explicit: Iterable[str] | None = None) -> list[Path]:
     """`--budgets` files, else RCLASS_BUDGETS, else /etc/rclass/budgets.yaml if it exists."""
     if explicit:
         return [Path(p) for p in explicit]
-    env = os.environ.get("RCLASS_BUDGETS")
+    env = trust.env("RCLASS_BUDGETS")  # ignored inside a hook, where a repository could set it
     if env:
         return [Path(p) for p in env.split(os.pathsep) if p]
     return [DEFAULT_PATH] if DEFAULT_PATH.is_file() else []
@@ -258,6 +258,34 @@ class Spend:
         return out
 
 
+def _stale(entries: Any, before: float) -> bool:
+    """Every entry older than `before`. An unreadable one counts as stale, so it can't take every budget down."""
+    if not isinstance(entries, list):
+        return True
+    for x in entries:
+        try:
+            if float(x[0]) >= before:
+                return False
+        except (TypeError, ValueError, IndexError, KeyError):
+            continue
+    return True
+
+
+def shadowed(budgets: list[Budget]) -> list[tuple[Budget, Budget]]:
+    """(earlier, later) pairs where every call the later budget matches, the earlier one matches first, so the
+    later one never applies. Limits don't stack: the first match decides."""
+    out = []
+    for i, a in enumerate(budgets):
+        for b in budgets[i + 1:]:
+            if a.server != b.server:
+                continue
+            if a.tools is not None and (b.tools is None or not set(b.tools) <= set(a.tools)):
+                continue
+            if all(k in b.where and b.where[k] == v and type(b.where[k]) is type(v) for k, v in a.where.items()):
+                out.append((a, b))
+    return out
+
+
 class Ledger:
     """What each budget has spent, in `<state dir>/budgets.json`. Check-and-spend happens under one lock."""
 
@@ -298,8 +326,7 @@ class Ledger:
                         return None
                 spent.append([now, amount])
                 data[key] = spent
-                for k in [k for k, v in data.items() if "@" in k and isinstance(v, list) and v and
-                          all(isinstance(x, list) and x and now - float(x[0]) > self.KEEP for x in v)]:
+                for k in [k for k, v in data.items() if "@" in k and k != key and _stale(v, now - self.KEEP)]:
                     del data[k]
                 tmp = self.path.with_suffix(f".{os.getpid()}.tmp")
                 tmp.write_text(json.dumps(data), encoding="utf-8")

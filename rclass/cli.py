@@ -296,6 +296,8 @@ def _gate_args(ns: argparse.Namespace) -> list[str]:
         out += ["--servers", str(Path(path).expanduser().resolve())]  # the hook runs from another folder
     for path in getattr(ns, "budgets", None) or []:
         out += ["--budgets", str(Path(path).expanduser().resolve())]
+    if getattr(ns, "state_dir", None):
+        out += ["--state-dir", str(Path(ns.state_dir).expanduser().resolve())]
     return out
 
 
@@ -334,6 +336,10 @@ def cmd_budgets(ns: argparse.Namespace) -> int:
             line += f", {b.amount.arg} " + " and ".join(c for c in caps if c)
         print(line)
     print("R3 and R4 calls are never covered by a budget; they always ask.")
+    for a, b in budgets.shadowed(found):
+        print(f"warning: '{b.name}' never applies: every call it matches, the earlier budget '{a.name}' matches "
+              "first, and the first matching budget decides (limits don't stack). Put the narrower budget first.",
+              file=sys.stderr)
     weak = budgets.writable(paths)
     if weak:
         print(f"warning: you can edit {', '.join(map(str, weak))}, so an agent running as you could too. "
@@ -344,8 +350,11 @@ def cmd_budgets(ns: argparse.Namespace) -> int:
 def cmd_hook(ns: argparse.Namespace) -> int:
     """Every failure, including a bad flag or an unreadable registry, answers "ask" and exits 0, because
     Claude Code treats any other exit code except 2 as "no decision" and would run the call ungated."""
+    from . import gate
     from .gate import ask_on_error, run_hook, state_dir
     try:
+        if ns.state_dir:
+            gate.STATE_DIR = Path(ns.state_dir).expanduser() / "rclass"
         policy = _gate_policy(ns)
         policy.budgets = _load_budgets(ns)
         mapping = _parse_assume(ns.map)
@@ -528,6 +537,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="server mappings recognising your own MCP servers (default: RCLASS_SERVERS, else "
                     "/etc/rclass/servers.yaml); keep the file where agents can't write")
     hk.add_argument("--override", action="append", help="deployment override record (repeatable)")
+    hk.add_argument("--state-dir", metavar="DIR", help="where the hook keeps session state, budget counts and the "
+                    "decision log (default: ~/.local/state; inside a hook, RCLASS_STATE_DIR and XDG_STATE_HOME are "
+                    "ignored because a repository could set them)")
     hk.add_argument("--budgets", action="append", metavar="FILE",
                     help="R2 budgets: compensable calls that may run without a prompt, up to a limit (default: "
                     "RCLASS_BUDGETS, else /etc/rclass/budgets.yaml); keep the file where agents can't write")
@@ -569,6 +581,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="server mappings recognising your own MCP servers (default: RCLASS_SERVERS, else "
                     "/etc/rclass/servers.yaml); keep the file where agents can't write")
     po.add_argument("--override", action="append", help="deployment override record (repeatable)")
+    po.add_argument("--state-dir", metavar="DIR", help="claude-hook: pass --state-dir to the hook")
     po.add_argument("--budgets", action="append", metavar="FILE",
                     help="R2 budget file passed to the generated hook (claude-hook only; repeatable)")
     po.set_defaults(fn=cmd_policy)

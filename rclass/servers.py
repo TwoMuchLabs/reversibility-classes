@@ -114,7 +114,7 @@ def default_paths(explicit: Iterable[str] | None = None) -> list[Path]:
     """`--servers` files, else RCLASS_SERVERS, else /etc/rclass/servers.yaml if it exists."""
     if explicit:
         return [Path(p) for p in explicit]
-    env = os.environ.get("RCLASS_SERVERS")
+    env = trust.env("RCLASS_SERVERS")  # ignored inside a hook, where a repository could set it
     if env:
         return [Path(p) for p in env.split(os.pathsep) if p]
     return [DEFAULT_PATH] if DEFAULT_PATH.is_file() else []
