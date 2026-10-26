@@ -298,6 +298,10 @@ def _gate_args(ns: argparse.Namespace) -> list[str]:
         out += ["--budgets", str(Path(path).expanduser().resolve())]
     if getattr(ns, "state_dir", None):
         out += ["--state-dir", str(Path(ns.state_dir).expanduser().resolve())]
+    for path in getattr(ns, "registry", None) or []:
+        out += ["--registry", str(Path(path).expanduser().resolve())]
+    for path in getattr(ns, "override", None) or []:
+        out += ["--override", str(Path(path).expanduser().resolve())]
     return out
 
 
