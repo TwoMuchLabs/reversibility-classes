@@ -347,18 +347,37 @@ def cmd_budgets(ns: argparse.Namespace) -> int:
     return 0
 
 
+def _check_hook_starts() -> None:
+    """Run the generated hook program once, isolated as Claude Code will run it, and refuse settings that
+    can't start: a hook that crashes lets every call through."""
+    import subprocess
+    from .gate import hook_boot
+    from .scan import rclass_version
+    try:
+        r = subprocess.run([sys.executable, "-I", "-c", hook_boot(), "--version"], capture_output=True, text=True,
+                           timeout=60, stdin=subprocess.DEVNULL)
+        ok = r.returncode == 0 and r.stdout.strip() == f"rclass {rclass_version()}"
+        detail = (r.stdout + r.stderr).strip()[-300:]
+    except (OSError, subprocess.SubprocessError) as exc:
+        ok, detail = False, exc.__class__.__name__
+    if not ok:
+        raise UsageError(f"the generated hook command doesn't start with `python -I` ({detail}); install rclass "
+                         "and its dependencies into this interpreter's own site-packages and run this again")
+
+
 def cmd_hook(ns: argparse.Namespace) -> int:
     """Every failure, including a bad flag or an unreadable registry, answers "ask" and exits 0, because
     Claude Code treats any other exit code except 2 as "no decision" and would run the call ungated."""
-    from . import gate
+    from . import gate, trust
     from .gate import ask_on_error, run_hook, state_dir
+    trust.IN_HOOK = True  # from here on, no repository-settable variable is trusted (rclass/trust.py)
     try:
         if ns.state_dir:
-            gate.STATE_DIR = Path(ns.state_dir).expanduser() / "rclass"
+            gate.STATE_DIR = trust.expand(ns.state_dir) / "rclass"
         policy = _gate_policy(ns)
         policy.budgets = _load_budgets(ns)
         mapping = _parse_assume(ns.map)
-        log = None if ns.no_log else Path(ns.log).expanduser() if ns.log else state_dir() / "audit.jsonl"
+        log = None if ns.no_log else trust.expand(ns.log) if ns.log else state_dir() / "audit.jsonl"
     except Exception as exc:  # noqa: BLE001
         print(f"rclass hook: {exc}", file=sys.stderr)
         return ask_on_error(sys.stdout, f"rclass hook is misconfigured: {exc.__class__.__name__}")
@@ -392,6 +411,7 @@ def cmd_policy(ns: argparse.Namespace) -> int:
         except budgets.BudgetError as exc:
             raise UsageError(str(exc)) from None
         text = gate.claude_hook_settings(_gate_args(ns))
+        _check_hook_starts()
     else:
         if getattr(ns, "budgets", None):
             print("note: budgets need the hook, which counts calls; static policy still asks for every R2 tool",
@@ -426,8 +446,10 @@ def cmd_policy(ns: argparse.Namespace) -> int:
 
 def cmd_audit(ns: argparse.Namespace) -> int:
     """`verify`: exit 0 if the chain is intact, 1 if not. `report`: the decisions an auditor asks about."""
-    from . import audit
+    from . import audit, gate
     from .gate import state_dir
+    if ns.state_dir:
+        gate.STATE_DIR = Path(ns.state_dir).expanduser() / "rclass"
     path = Path(ns.log).expanduser() if ns.log else state_dir() / "audit.jsonl"
     if not path.is_file():
         raise UsageError(f"no decision log at {path}")
@@ -606,6 +628,7 @@ def main(argv: list[str] | None = None) -> int:
     au.add_argument("--cursor", metavar="FILE", help="export: start after the line recorded here, and record the "
                     "last line sent, so repeated runs send only new lines")
     au.add_argument("--timeout", type=float, default=10.0, help="export: seconds per request (default 10)")
+    au.add_argument("--state-dir", metavar="DIR", help="the folder given to the hook's --state-dir, to find its log")
     au.set_defaults(fn=cmd_audit)
 
     po = sub.add_parser("policy", help="write enforceable policy for a client or gateway from your MCP config",

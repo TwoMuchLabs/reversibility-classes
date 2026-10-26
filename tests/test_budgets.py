@@ -450,3 +450,76 @@ def test_outside_a_hook_nothing_is_refused(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "b.yaml").write_text(TABLES)
     budgets.refuse_project_files([tmp_path / "b.yaml"])  # no CLAUDE_PROJECT_DIR: a person running rclass
+
+
+# --------------------------------------------------------------------------- third review pass
+
+def test_hook_that_cannot_import_its_dependencies_asks_and_exits_0():
+    import subprocess
+    import sys
+    import sysconfig
+    stdlib = [sysconfig.get_paths()["stdlib"], sysconfig.get_paths()["platstdlib"]]
+    r = subprocess.run([sys.executable, "-I", "-c", gate.hook_boot(paths=stdlib), "hook", "claude-code"],
+                       input="{}", capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0  # any other code but 2 would be "no decision": the call runs ungated
+    out = json.loads(r.stdout)["hookSpecificOutput"]
+    assert out["permissionDecision"] == "ask" and "could not start (ModuleNotFoundError)" in out["permissionDecisionReason"]
+
+
+def test_generated_hook_ignores_pythonpath(tmp_path):
+    import subprocess
+    import sys
+    fake = tmp_path / "pp" / "rclass"
+    fake.mkdir(parents=True)
+    (fake / "__init__.py").write_text("")
+    (fake / "cli.py").write_text("def main():\n    print('FAKE')\n    return 0\n")
+    r = subprocess.run([sys.executable, "-I", "-c", gate.hook_boot(), "--version"], capture_output=True, text=True,
+                       env={"PYTHONPATH": str(tmp_path / "pp"), "PATH": "/usr/bin:/bin"}, cwd=tmp_path / "pp", timeout=60)
+    assert r.stdout.strip().startswith("rclass ") and "FAKE" not in r.stdout
+
+
+def test_policy_refuses_settings_whose_hook_cannot_start(monkeypatch, capsys):
+    monkeypatch.setattr(gate, "hook_boot", lambda paths=None: "import sys; sys.exit(1)")
+    assert main(["policy", "--format", "claude-hook"]) == 2
+    assert "doesn't start" in capsys.readouterr().err
+
+
+def test_audit_user_comes_from_the_system_inside_a_hook(project, monkeypatch, tmp_path):
+    import pwd
+    import os
+    proj, _ = project
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(proj))
+    monkeypatch.setenv("USER", "alice")
+    monkeypatch.setenv("LOGNAME", "alice")
+    log = tmp_path / "a.jsonl"
+    hook(project, "mcp__db__create_table", {}, policy(TABLES), log=log)
+    assert audit.read(log)[0]["user"] == pwd.getpwuid(os.getuid()).pw_name
+
+
+def test_rclass_hook_distrusts_env_even_without_claude_project_dir(monkeypatch, tmp_path, capsys):
+    f = tmp_path / "b.yaml"
+    f.write_text(TABLES)
+    monkeypatch.setenv("RCLASS_BUDGETS", str(f))  # another client running the hook, no CLAUDE_PROJECT_DIR
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"tool_name": "TodoWrite", "hook_event_name": "PreToolUse"})))
+    assert main(["hook", "claude-code", "--no-log"]) == 0
+    from rclass import trust
+    assert trust.in_hook() and budgets.default_paths() == []
+
+
+def test_map_does_not_vouch_for_a_templated_command(project, monkeypatch):
+    proj, home = project
+    (home / ".claude.json").write_text(json.dumps({"mcpServers": {"corp": {"command": "${CORP_MCP:-/opt/corp/mcp}"}}}))
+    monkeypatch.setenv("CORP_MCP", str(proj / "evil"))
+    out = hook(project, "mcp__corp__create_table", {}, policy(TABLES), mapping={"corp": "sqlite"})
+    assert out["permissionDecision"] == "ask" and "unrecognised" in out["permissionDecisionReason"]
+    (home / ".claude.json").write_text(json.dumps({"mcpServers": {"corp": {"command": "/opt/corp/mcp"}}}))
+    out = hook(project, "mcp__corp__create_table", {}, policy(TABLES), mapping={"corp": "sqlite"}, session="t2")
+    assert out["permissionDecision"] == "allow"  # the same entry, untemplated, is vouched for
+
+
+def test_tilde_uses_the_real_home_inside_a_hook(project, monkeypatch):
+    from rclass import trust
+    proj, _ = project
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(proj))
+    monkeypatch.setenv("HOME", str(proj))
+    assert trust.expand("~/x.yaml") == trust.real_home() / "x.yaml"

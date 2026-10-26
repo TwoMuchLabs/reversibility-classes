@@ -19,7 +19,6 @@ logged, only a SHA-256 digest of them, so a reviewer holding the arguments can c
 
 from __future__ import annotations
 
-import getpass
 import hashlib
 import json
 import os
@@ -39,10 +38,8 @@ def args_digest(args: Mapping[str, Any] | None) -> str | None:
 
 
 def who() -> dict[str, str | None]:
-    try:
-        user = getpass.getuser()
-    except Exception:  # noqa: BLE001 - no user name is a fact to log, not a reason to fail
-        user = None
+    from .trust import user_name
+    user = user_name()
     try:
         host = socket.gethostname()
     except OSError:

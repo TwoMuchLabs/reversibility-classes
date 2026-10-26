@@ -99,7 +99,7 @@ def parse(doc: Any, origin: str) -> list[ServerMapping]:
 def load(paths: Iterable[str | Path]) -> list[ServerMapping]:
     out: list[ServerMapping] = []
     for p in paths:
-        p = Path(p).expanduser()
+        p = trust.expand(p)
         try:
             doc = yaml.safe_load(p.read_text(encoding="utf-8"))
         except FileNotFoundError:

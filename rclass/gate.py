@@ -104,7 +104,9 @@ def server_records(configs: Iterable[Path], registry: Registry, cwd: Path, home:
                 version, pinned = pinned_version(target)
             msid, mver, mpinned, _ = (None, None, False, None) if cfg.config_error else \
                 sc.identify_by_mapping(cfg, registry)
-            if name in mapped and not cfg.project and not cfg.config_error:
+            # `--map` vouches by name, so not for an entry whose command depends on a variable: inside a hook a
+            # repository's settings `env` could set it and change what runs.
+            if name in mapped and not cfg.project and not cfg.config_error and not cfg.templated:
                 sid = mapped[name]
             elif cfg.config_error:
                 sid = None
@@ -657,19 +659,45 @@ def claude_hook_settings(extra_args: list[str], python: str | None = None) -> st
     # `python -m` puts the current folder first on sys.path, and Claude Code runs hooks in the project
     # folder, so a repository shipping its own `rclass/` package would run instead. -P (Python 3.11+)
     # leaves the current folder out; older versions drop it before importing.
-    # -I as well: a repository's settings `env` reaches hooks, and PYTHONPATH there would load its own `rclass`.
-    # -I also drops user site-packages, so the folder rclass is installed in is put back explicitly, fixed now.
     py = python or sys.executable
-    site = str(Path(__file__).resolve().parent.parent)
-    boot = (f"import sys; sys.path[:] = [p for p in sys.path if p not in ('', '.')]; sys.path.insert(0, {site!r}); "
-            "from rclass.cli import main; sys.exit(main())")
-    argv = [py, "-I", "-c", boot]
+    argv = [py, "-I", "-c", hook_boot()]
     command = " ".join(shlex.quote(a) for a in [*argv, "hook", "claude-code", *extra_args])
     # Every tool, not only MCP ones: the session guard must see Read, Bash and the like to know the session
     # has read data. Non-MCP calls get no decision, except WebFetch after a read.
     # PostToolUse records that a call actually ran, so the log shows which prompts were approved.
     entry = [{"matcher": ".*", "hooks": [{"type": "command", "command": command, "timeout": 30}]}]
     return json.dumps({"hooks": {"PreToolUse": entry, "PostToolUse": entry}}, indent=2) + "\n"
+
+
+_ASK_ON_START_FAILURE = json.dumps({"hookSpecificOutput": {
+    "hookEventName": "PreToolUse", "permissionDecision": "ask",
+    "permissionDecisionReason": "rclass could not start (ERR); asking instead."}})
+
+
+def hook_boot(paths: list[str] | None = None) -> str:
+    """The `python -I -c` program the generated hook runs.
+
+    - `-I`: a repository's settings `env` reaches hooks, and `PYTHONPATH` there would load its own `rclass`.
+      `-I` ignores every `PYTHON*` variable, user site-packages and the current folder.
+    - `sys.path` is set to the one this interpreter has now, when the settings are generated (minus the current
+      folder), with rclass's own folder first: so rclass and its dependencies import as they do now, wherever
+      they are installed, and nothing in the environment at hook time changes that.
+    - Any failure before rclass's own error handling runs (a missing dependency, say) prints "ask" and exits
+      0. Claude Code treats any other exit code except 2 as "no decision" and would run the call ungated.
+    """
+    here = str(Path(__file__).resolve().parent.parent)
+    keep = [p for p in (paths if paths is not None else sys.path) if p not in ("", ".") and p != here]
+    keep = [here, *dict.fromkeys(str(Path(p).resolve()) if Path(p).exists() else p for p in keep)]
+    return "\n".join([
+        "import sys",
+        "try:",
+        f"    sys.path[:] = {keep!r}",
+        "    from rclass.cli import main",
+        "except BaseException as exc:",
+        f"    print({_ASK_ON_START_FAILURE!r}.replace('ERR', type(exc).__name__))",
+        "    sys.exit(0)",
+        "sys.exit(main())",
+    ])
 
 
 def main_hook(argv_policy: GatePolicy, mapping: Mapping[str, str], log: str | None, registry_factory) -> int:
