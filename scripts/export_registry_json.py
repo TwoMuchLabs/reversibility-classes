@@ -9,6 +9,7 @@ Every record is validated first, so the site never shows a record CI would rejec
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -26,11 +27,23 @@ def git_commit() -> str | None:
         return None
 
 
+def spec_version() -> str | None:
+    """The specification's own version from SPEC.md, as MAJOR.MINOR (e.g. "0.3").
+
+    The site shows this, not a record's spec_version: records are written against
+    different spec versions, so any single record's value depends on file order.
+    """
+    m = re.search(r"^\*\*Version:\*\*\s*(\d+)\.(\d+)", (ROOT / "SPEC.md").read_text("utf-8"), re.M)
+    return f"{m.group(1)}.{m.group(2)}" if m else None
+
+
 def main(out: Path) -> None:
+    record_versions = []
     servers, tools = [], []
     for path in sorted((ROOT / "registry").glob("*.y*ml")):
         record = read_record_file(path)
         validate_record(record, str(path))
+        record_versions.append(str(record.get("spec_version", "0.1")))
         s = record["server"]
         servers.append({
             "id": s["id"],
@@ -50,7 +63,7 @@ def main(out: Path) -> None:
                 entry["w"] = t["when"]
             tools.append(entry)
     doc = {
-        "spec_version": record.get("spec_version", "0.1"),
+        "spec_version": spec_version() or max(record_versions, key=lambda v: tuple(map(int, v.split(".")))),
         "commit": git_commit(),
         "servers": servers,
         "tools": tools,
