@@ -1,0 +1,246 @@
+# Reversibility Classes — Redis MCP Server (official)
+# Tool names verified against the evidence URLs below. Classes are drafts until reviewed.
+spec_version: '0.3'
+server:
+  id: redis
+  name: Redis MCP Server (official)
+  source: https://github.com/redis/mcp-redis
+  evidence:
+  - https://github.com/redis/mcp-redis/tree/b814c36c6309d5e2e5ea238b86ff25f60edc0ce8/src/tools
+  - https://raw.githubusercontent.com/redis/mcp-redis/b814c36c6309d5e2e5ea238b86ff25f60edc0ce8/src/tools/hash.py
+  - https://raw.githubusercontent.com/redis/mcp-redis/b814c36c6309d5e2e5ea238b86ff25f60edc0ce8/src/tools/json.py
+  - https://raw.githubusercontent.com/redis/mcp-redis/b814c36c6309d5e2e5ea238b86ff25f60edc0ce8/src/tools/list.py
+  - https://raw.githubusercontent.com/redis/mcp-redis/b814c36c6309d5e2e5ea238b86ff25f60edc0ce8/src/tools/misc.py
+  - https://raw.githubusercontent.com/redis/mcp-redis/b814c36c6309d5e2e5ea238b86ff25f60edc0ce8/src/tools/pub_sub.py
+  - https://raw.githubusercontent.com/redis/mcp-redis/b814c36c6309d5e2e5ea238b86ff25f60edc0ce8/src/tools/redis_query_engine.py
+  - https://raw.githubusercontent.com/redis/mcp-redis/b814c36c6309d5e2e5ea238b86ff25f60edc0ce8/src/tools/server_management.py
+  - https://raw.githubusercontent.com/redis/mcp-redis/b814c36c6309d5e2e5ea238b86ff25f60edc0ce8/src/tools/set.py
+  - https://raw.githubusercontent.com/redis/mcp-redis/b814c36c6309d5e2e5ea238b86ff25f60edc0ce8/src/tools/sorted_set.py
+  - https://raw.githubusercontent.com/redis/mcp-redis/b814c36c6309d5e2e5ea238b86ff25f60edc0ce8/src/tools/stream.py
+  - https://raw.githubusercontent.com/redis/mcp-redis/b814c36c6309d5e2e5ea238b86ff25f60edc0ce8/src/tools/string.py
+  version: redis/mcp-redis@b814c36c
+  status: active
+  notes: Redis keeps no value history by default, so overwrites, removals, expirations, and message delivery
+    are classified conservatively; deployments with backups can lower non-disclosure tools with an override.
+  packages:
+  - redis-mcp-server
+tools:
+- name: client_list
+  class: R0
+  rationale: Reads the current Redis client list without changing it.
+  review: draft
+- name: create_vector_index_hash
+  class: R3
+  rationale: Creates an index that this server cannot remove, so recovery requires another Redis interface.
+  review: draft
+- name: dbsize
+  class: R0
+  rationale: Reads the number of keys in the selected database.
+  review: draft
+- name: delete
+  class: R4
+  rationale: Permanently deletes a key and its value because Redis keeps no history by default.
+  review: draft
+- name: expire
+  class: R4
+  rationale: Schedules a key and its value for permanent deletion without preserving either one.
+  review: draft
+- name: get
+  class: R0
+  rationale: Reads a string value without changing it.
+  review: draft
+- name: get_index_info
+  class: R0
+  rationale: Reads an index's schema and statistics.
+  review: draft
+- name: get_indexed_keys_number
+  class: R0
+  rationale: Reads the number of keys matched by an index.
+  review: draft
+- name: get_indexes
+  class: R0
+  rationale: Lists the database's search indexes.
+  review: draft
+- name: get_vector_from_hash
+  class: R0
+  rationale: Reads and decodes a vector stored in a hash field.
+  review: draft
+- name: hdel
+  class: R4
+  rationale: Permanently deletes a hash field because Redis keeps no history by default.
+  review: draft
+- name: hexists
+  class: R0
+  rationale: Checks whether a hash field exists without changing it.
+  review: draft
+- name: hget
+  class: R0
+  rationale: Reads one hash field without changing it.
+  review: draft
+- name: hgetall
+  class: R0
+  rationale: Reads every field in a hash without changing it.
+  review: draft
+- name: hset
+  class: R4
+  rationale: Can overwrite a hash field or expire the entire hash without preserving its prior state.
+  review: draft
+- name: hybrid_search
+  class: R0
+  rationale: Searches an existing index without changing stored data or index state.
+  review: draft
+- name: info
+  class: R0
+  rationale: Reads Redis server information and statistics.
+  review: draft
+- name: json_del
+  class: R4
+  rationale: Permanently deletes a JSON value or path because Redis keeps no history by default.
+  review: draft
+- name: json_get
+  class: R0
+  rationale: Reads a JSON value without changing it.
+  review: draft
+- name: json_set
+  class: R4
+  rationale: Can overwrite a JSON value or expire the entire key without preserving its prior state.
+  review: draft
+- name: llen
+  class: R0
+  rationale: Reads a list's length without changing the list.
+  review: draft
+- name: lpop
+  class: R4
+  rationale: Permanently removes the first list element because Redis keeps no history by default.
+  review: draft
+- name: lpush
+  class: R4
+  rationale: Can expire the entire list, and the server cannot safely distinguish and remove only this inserted value.
+  review: draft
+- name: lrange
+  class: R0
+  rationale: Reads a range of list elements without changing the list.
+  review: draft
+- name: lrem
+  class: R4
+  rationale: Permanently removes one or more matching list elements without preserving their positions.
+  review: draft
+- name: psubscribe
+  class: R1
+  rationale: Creates only a process-local pattern subscription that the returned handle can close.
+  compensation: unsubscribe with the returned subscription_id
+  review: draft
+- name: publish
+  class: R4
+  rationale: Delivers a message to current channel subscribers, which cannot be recalled after delivery.
+  disclosure: true
+  review: draft
+- name: read_messages
+  class: R0
+  rationale: Reads messages already delivered to a process-local subscription handle.
+  review: draft
+- name: rename
+  class: R4
+  rationale: Can overwrite the destination key and permanently discard its previous value.
+  review: draft
+- name: rpop
+  class: R4
+  rationale: Permanently removes the last list element because Redis keeps no history by default.
+  review: draft
+- name: rpush
+  class: R4
+  rationale: Can expire the entire list, and the server cannot safely distinguish and remove only this inserted value.
+  review: draft
+- name: sadd
+  class: R4
+  rationale: Can expire the entire set, and its response does not distinguish a newly added member from an existing one.
+  review: draft
+- name: scan_all_keys
+  class: R0
+  rationale: Reads matching key names without changing the database.
+  review: draft
+- name: scan_keys
+  class: R0
+  rationale: Reads one cursor page of matching key names without changing the database.
+  review: draft
+- name: search_redis_documents
+  class: R0
+  rationale: Sends a read-only query to the server's configured Redis documentation search provider.
+  review: draft
+- name: set
+  class: R4
+  rationale: Can overwrite a string value or schedule it for deletion without preserving its prior state.
+  review: draft
+- name: set_vector_in_hash
+  class: R4
+  rationale: Can overwrite an existing vector field without preserving its prior bytes.
+  review: draft
+- name: smembers
+  class: R0
+  rationale: Reads every member of a set without changing it.
+  review: draft
+- name: srem
+  class: R4
+  rationale: Permanently removes a set member because Redis keeps no history by default.
+  review: draft
+- name: subscribe
+  class: R1
+  rationale: Creates only a process-local channel subscription that the returned handle can close.
+  compensation: unsubscribe with the returned subscription_id
+  review: draft
+- name: type
+  class: R0
+  rationale: Reads a key's type and time to live without changing either one.
+  review: draft
+- name: unsubscribe
+  class: R4
+  rationale: Closes a live Pub/Sub handle, so messages published before a replacement subscription are unrecoverable.
+  review: draft
+- name: vector_search_hash
+  class: R0
+  rationale: Searches an existing vector index without changing stored data or index state.
+  review: draft
+- name: xack
+  class: R3
+  rationale: Removes consumer-group pending state that can only be reconstructed with other Redis interfaces.
+  review: draft
+- name: xadd
+  class: R4
+  rationale: Adds a stream message that consumers can receive, and delivery cannot be recalled.
+  disclosure: true
+  review: draft
+- name: xdel
+  class: R4
+  rationale: Permanently removes a stream entry's payload because Redis keeps no history by default.
+  review: draft
+- name: xgroup_create
+  class: R2
+  rationale: Creates a consumer group and may create an empty stream, both of which this server can remove.
+  compensation:
+  - xgroup_destroy with the same key and group_name
+  - delete the stream only if mkstream created it for this call
+  review: draft
+- name: xgroup_destroy
+  class: R4
+  rationale: Permanently deletes the consumer group's progress and pending-entry state.
+  review: draft
+- name: xrange
+  class: R0
+  rationale: Reads stream entries without changing the stream.
+  review: draft
+- name: xreadgroup
+  class: R3
+  rationale: Advances consumer-group delivery state that this server cannot restore to its exact prior state.
+  review: draft
+- name: zadd
+  class: R4
+  rationale: Can overwrite a member's score or expire the entire sorted set without preserving its prior state.
+  review: draft
+- name: zrange
+  class: R0
+  rationale: Reads a range of sorted-set members without changing the set.
+  review: draft
+- name: zrem
+  class: R4
+  rationale: Permanently removes a sorted-set member and score because Redis keeps no history by default.
+  review: draft
