@@ -8,7 +8,7 @@ The expected results were written from the text of [SPEC.md](../SPEC.md), not ge
 
 ```jsonc
 {
-  "spec_version": "0.3",
+  "spec_version": "0.4",
   "records": { "db": { /* a classification record */ }, ... },
   "cases": [
     {
@@ -25,7 +25,10 @@ The expected results were written from the text of [SPEC.md](../SPEC.md), not ge
         "annotations": { "readOnlyHint": true },         // optional MCP tool annotations
         "trusted_server": false,                         // optional; default false
         "deployed_version": "1.3.9",                     // optional: the release the deployment pins (null = unreadable, e.g. a digest)
-        "version_pinned": true                           // optional; default false (unpinned = newest release)
+        "version_pinned": true,                          // optional; default false (unpinned = newest release)
+        "environment": "prod",                           // optional: the deployment's declared environment
+        "today": "2026-02-01",                           // optional: the date for override expiry; default 2026-06-01
+        "governed_overrides": true                       // optional; default false
       },
       "expect": {
         "class": "R0",
@@ -60,6 +63,7 @@ For each entry in `invalid_records`, your validator must reject the record. The 
 - **Regular expressions.** `matches` uses *search* semantics (a match anywhere; anchors are written explicitly), case-insensitive. Registry patterns stay within the subset that behaves the same in Python `re` and ECMAScript: character classes, `\s`, `\b`, `^`, `$`, `?`, `*`, `+`, `|` and groups. Two known differences to guard against in a port: Python's `$` also matches just before a trailing newline (registry patterns that anchor the end write `\s*$`, which makes the two agree), and case-insensitive matching outside ASCII differs between engines (registry patterns are ASCII).
 - **Missing, null and wrong-typed arguments** never satisfy `matches`, `equals` or `in`. An argument present with value `null` is present, so `absent: true` does not match it.
 - **Versions.** When a record has `server.min_version` and the call is `version_pinned` to an older release, or to one with no readable version, rules that lower the class do not apply (SPEC 5.1). Compare versions numerically by their first three numbers, ignoring a leading `v`.
+- **Override governance.** Skip an override whose `server.environments` doesn't include the call's `environment` (none declared means no scoped override applies). An override whose `server.expires` is before `today`, or, with `governed_overrides`, one missing `owner`, `approved_by` or `expires`, may raise a class but not lower it (SPEC 5.5).
 - **Several overrides.** Load every override; the one giving the call the highest class applies, regardless of order (SPEC 5.5).
 - **Invalid records.** A record must be rejected if it fails [the JSON schema](../schema/rclass.schema.json) *or* breaks a rule the schema cannot express (a disclosure below R4, a duplicate tool name, a pre-image entry that is not R1, a package with a version). The vectors don't say which check catches which record; any combination that rejects all of them conforms.
 - **Pre-image results.** Where `expect.preimage` is true, your result must carry two things: the class that applies once the gateway confirms the capture, and the `fallback` class to use if it does not. How you represent that is up to you; in `rclass` it is `Classification.preimage` plus `unconfirmed()`.

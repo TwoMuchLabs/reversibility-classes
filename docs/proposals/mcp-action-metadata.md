@@ -60,7 +60,7 @@ A host that implements a finer scheme can do better: in Reversibility Classes, R
 **Evidence and implementation.**
 - The Reversibility Classes registry classifies 536 tools across 20 MCP servers (GitHub, Stripe, Supabase, Sentry, Terraform, Kubernetes, Playwright, Notion, the reference servers and others); each class has a one-sentence rationale and a link to the source the tool names were checked against.
 - `rclass hook claude-code` is a working host-side consumer: a Claude Code PreToolUse hook that classifies each MCP call with its arguments and asks for confirmation from R2 up.
-- 52 language-neutral conformance vectors, written from the specification text.
+- 60 language-neutral conformance vectors, written from the specification text.
 
 **What this does not change.** No existing field, enum value or default. It does not decide coexistence with `destructiveHint`.
 

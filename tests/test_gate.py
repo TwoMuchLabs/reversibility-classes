@@ -547,3 +547,68 @@ def test_n4_state_that_cannot_be_kept_assumes_a_read(guarded, tmp_path, monkeypa
     monkeypatch.setenv("RCLASS_STATE_DIR", str(blocker))
     d = hook(guarded, "mcp__web__fetch", {"url": "https://a.example"}, gate.GatePolicy(allow_up_to=RClass.R1), session="n4b")
     assert d["permissionDecision"] == "ask"
+
+
+# --------------------------------------------------------------------------- governed overrides (SPEC 5.5, 0.4.0)
+
+def _override_file(tmp_path, name="ov.yaml", **meta):
+    import yaml
+    srv = {"id": "sqlite", "name": "SQLite", "source": "s", "version": "v", "evidence": ["https://example.com"],
+           "notes": "point-in-time backups", **meta}
+    rec = {"spec_version": "0.4", "server": srv,
+           "tools": [{"name": "write_query", "class": "R3", "rationale": "Backups make DROP recoverable by a DBA."}]}
+    f = tmp_path / name
+    f.write_text(yaml.safe_dump(rec))
+    return f
+
+
+def test_lookup_respects_expiry_environment_and_governance(tmp_path, capsys):
+    drop = '{"query": "DROP TABLE t"}'
+    expired = _override_file(tmp_path, "exp.yaml", expires="2020-01-01")
+    assert main(["lookup", "sqlite", "write_query", "--args", drop, "--override", str(expired), "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["class"] == "R4"
+    scoped = _override_file(tmp_path, "dev.yaml", environments=["dev"])
+    main(["lookup", "sqlite", "write_query", "--args", drop, "--override", str(scoped), "--json"])
+    assert json.loads(capsys.readouterr().out)["class"] == "R4"
+    main(["lookup", "sqlite", "write_query", "--args", drop, "--override", str(scoped), "--environment", "dev", "--json"])
+    assert json.loads(capsys.readouterr().out)["class"] == "R3"
+    bare = _override_file(tmp_path, "bare.yaml")
+    main(["lookup", "sqlite", "write_query", "--args", drop, "--override", str(bare), "--governed-overrides", "--json"])
+    assert json.loads(capsys.readouterr().out)["class"] == "R4"
+    full = _override_file(tmp_path, "full.yaml", owner="data-platform", approved_by="ciso", expires="2099-01-01")
+    main(["lookup", "sqlite", "write_query", "--args", drop, "--override", str(full), "--governed-overrides", "--json"])
+    assert json.loads(capsys.readouterr().out)["class"] == "R3"
+
+
+def test_hook_logs_who_owns_the_override(project, tmp_path):
+    from rclass.cli import _registry
+    full = _override_file(tmp_path, owner="data-platform", approved_by="ciso@example.com", expires="2099-01-01")
+    reg = _registry(None, [str(full)])
+    proj, home = project
+    log = tmp_path / "a.jsonl"
+    event = json.dumps({"session_id": "go", "cwd": str(proj), "tool_name": "mcp__db__write_query",
+                        "tool_input": {"query": "DROP TABLE t"}})
+    gate.run_hook(io.StringIO(event), io.StringIO(), gate.GatePolicy(), lambda: reg, log_path=log, home=home)
+    entry = json.loads(log.read_text().splitlines()[0])
+    assert entry["class"] == "R3" and entry["source"] == "override"
+    assert entry["override"] == {"reason": "point-in-time backups", "owner": "data-platform",
+                                 "approved_by": "ciso@example.com", "expires": "2099-01-01"}
+
+
+def test_policy_hook_settings_carry_deployment_flags(tmp_path, capsys):
+    import shlex
+    ov = _override_file(tmp_path)
+    assert main(["policy", "--format", "claude-hook", "--environment", "prod", "--governed-overrides",
+                 "--override", str(ov)]) == 0
+    cmd = shlex.split(json.loads(capsys.readouterr().out)["hooks"]["PreToolUse"][0]["hooks"][0]["command"])
+    assert cmd[cmd.index("--environment") + 1] == "prod" and "--governed-overrides" in cmd
+    assert Path(cmd[cmd.index("--override") + 1]).is_absolute()
+
+
+def test_static_exports_ignore_overrides_that_may_not_lower(tmp_path, capsys):
+    cfg = tmp_path / "mcp.json"
+    cfg.write_text(json.dumps({"mcpServers": {"db": CONFIG["mcpServers"]["db"]}}))
+    expired = _override_file(tmp_path, expires="2020-01-01")
+    assert main(["policy", "--format", "claude-settings", str(cfg), "--override", str(expired)]) == 0
+    perms = json.loads(capsys.readouterr().out)["permissions"]
+    assert "mcp__db__write_query" in perms["ask"]
