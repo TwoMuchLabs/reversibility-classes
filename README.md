@@ -67,6 +67,33 @@ Exit codes: `0` ok · `1` something reachable is at or above the threshold (an u
 
 `--list` can't see version drift: it applies the record's classes to whatever version the config pins. Run a full scan somewhere you trust (a developer machine, or a scheduled job) to catch tools a newer release added.
 
+**Share the result without sharing your setup.** `--summary` prints a one-screen version meant for a pull request, a chat or a post:
+
+```bash
+rclass scan --list --summary
+```
+
+```text
+What can my agent not undo?   rclass 0.7.0 · 2026-11-19
+
+                               R0   R1   R2   R3   R4
+  Total                        20    7    0    2    6
+  Memory / knowledge graph …    3    3    0    0    3
+  Filesystem (MCP reference…   10    2    0    0    2
+  Git (MCP reference server)    7    2    0    2    1
+
+35 tools across 3 servers.
+Under the default policy an agent may act alone on 27 (R0–R1).
+The other 8 need a human.
+Worst class reachable: R4 (Irreversible).
+1 server could not be identified and counts as R4.
+Counts are the registry's, for the servers it recognises; nothing was started.
+Each tool is counted at its worst case. Registry classes are drafts.
+https://github.com/TwoMuchLabs/reversibility-classes
+```
+
+It counts exactly as the full report does, and prints less. A server is named only if it matched a record in the public registry, by that record's name; your own servers, and records from your own `--registry`, are folded into one unnamed row. It prints no config path, server key, tool name, argument, environment value or server output. What it does show is which public servers you run and how many servers and tools you have, so read it before you post it. `--summary` cannot be combined with `--json`, `--details` or `--show-server-errors`, and exit codes are unchanged.
+
 ## Enforce it
 
 **In Claude Code, gate every MCP call by its class.** `rclass hook` is a [PreToolUse hook](https://code.claude.com/docs/en/hooks): Claude Code hands it each MCP tool call with its arguments, and it answers with the class of *that* call. A SELECT through `write_query` is R0; the same tool with `DROP TABLE` is R4 and asks you first, even if you allowlisted the tool.
