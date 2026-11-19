@@ -1,12 +1,12 @@
 [build-system]
-requires = ["hatchling>=1.24"]
+requires = ["hatchling>=1.24", "hatch-fancy-pypi-readme>=24.1"]
 build-backend = "hatchling.build"
 
 [project]
 name = "rclass"
-version = "0.7.0"
+version = "0.8.0"
 description = "Reversibility Classes (R0-R4) for AI agent tool calls: spec, open registry and reference classifier"
-readme = "README.md"
+dynamic = ["readme"]
 requires-python = ">=3.10"
 license = "Apache-2.0 AND CC-BY-4.0"
 license-files = ["LICENSE", "LICENSE-SPEC-AND-DATA.md"]
@@ -15,7 +15,10 @@ keywords = ["ai-agents", "mcp", "model-context-protocol", "ai-governance", "agen
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
+  "Environment :: Console",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.12",
   "Topic :: Security",
 ]
 dependencies = ["pyyaml>=6", "jsonschema>=4.18"]
@@ -29,6 +32,20 @@ rclass = "rclass.cli:main"
 [project.urls]
 Homepage = "https://github.com/TwoMuchLabs/reversibility-classes"
 Specification = "https://github.com/TwoMuchLabs/reversibility-classes/blob/main/SPEC.md"
+Changelog = "https://github.com/TwoMuchLabs/reversibility-classes/blob/main/CHANGELOG.md"
+Issues = "https://github.com/TwoMuchLabs/reversibility-classes/issues"
+
+# The README is also the PyPI project page, where relative links do not resolve.
+# Point them at this version's tag on GitHub.
+[tool.hatch.metadata.hooks.fancy-pypi-readme]
+content-type = "text/markdown"
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
+path = "README.md"
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+pattern = '\]\((?!https?://|#|mailto:)([^)]+)\)'
+replacement = '](https://github.com/TwoMuchLabs/reversibility-classes/blob/v$HFPR_VERSION/\1)'
 
 [tool.hatch.build.targets.wheel]
 packages = ["rclass"]

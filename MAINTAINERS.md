@@ -7,3 +7,5 @@
 The project is looking for a co-maintainer from another organisation, especially someone who builds or runs an MCP gateway or client. See [GOVERNANCE.md](GOVERNANCE.md#becoming-a-maintainer).
 
 Security reports: see [SECURITY.md](SECURITY.md).
+
+How releases are cut and published: [docs/releasing.md](docs/releasing.md).

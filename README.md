@@ -74,7 +74,7 @@ rclass scan --list --summary
 ```
 
 ```text
-What can my agent not undo?   rclass 0.7.0 · 2026-11-19
+What can my agent not undo?   rclass 0.8.0 · 2026-11-20
 
                                R0   R1   R2   R3   R4
   Total                        20    7    0    2    6
