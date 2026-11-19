@@ -1249,6 +1249,88 @@ def render_text(result: ScanResult, details: bool = False, drafts_written: bool 
     return "\n".join(out).rstrip() + "\n"
 
 
+SUMMARY_URL = "https://github.com/TwoMuchLabs/reversibility-classes"
+SUMMARY_ROWS = 8
+
+
+def render_summary(result: ScanResult, public: Mapping[str, str], today: str | None = None) -> str:
+    """A one-screen summary meant to be pasted where other people can read it.
+
+    It prints class counts and nothing that comes from the reader's own setup: no config path,
+    no server key, no tool name, no argument, no environment value, no server output. A server is
+    named only if it matched a record in the bundled public registry, and then by that record's
+    name (`public` maps bundled record ids to names). Everything else is folded into one unnamed
+    row. Counting is the same as the full report: worst case per tool, and anything unrecognised
+    is R4.
+    """
+    today = today or datetime.now(timezone.utc).date().isoformat()
+    tot = result.totals()
+    tools = result.counted_tools()
+    out = [f"What can my agent not undo?   rclass {rclass_version()} · {today}", ""]
+    if not tools and not tot["servers_unknown"]:
+        out.append("Nothing could be counted: no server listed any tools.")
+    if tools:
+        named: dict[str, dict[str, int]] = {}
+        seen: dict[str, int] = {}
+        other = {str(k): 0 for k in RClass}
+        other_servers = 0
+        for s in result.servers:
+            if not s.counted:
+                continue
+            if s.record in public:
+                row = named.setdefault(s.record, {str(k): 0 for k in RClass})
+                seen[s.record] = seen.get(s.record, 0) + 1
+            else:
+                row, other_servers = other, other_servers + 1
+            for k, v in s.counts().items():
+                row[k] += v
+        rows = [(clean(public[sid], 26) + (f" ×{seen[sid]}" if seen[sid] > 1 else ""), c) for sid, c in named.items()]
+        rows.sort(key=lambda r: ([-r[1][str(k)] for k in reversed(RClass)], r[0]))
+        if len(rows) > SUMMARY_ROWS:
+            extra = rows[SUMMARY_ROWS - 1:]
+            folded = {str(k): sum(c[str(k)] for _, c in extra) for k in RClass}
+            rows = rows[:SUMMARY_ROWS - 1] + [(f"{len(extra)} more public servers", folded)]
+        if other_servers:
+            rows.append((f"{_n(other_servers, 'other server')} (not named)", other))
+        w = max([len(name) for name, _ in rows] + [5])
+
+        def cells(values: Iterable[Any]) -> str:
+            return "".join(f"{v:>5}" for v in values)
+
+        out.append(f"  {'':<{w}}{cells(str(k) for k in RClass)}")
+        out.append(f"  {'Total':<{w}}{cells(tot['by_class'].values())}")
+        out.extend(f"  {name:<{w}}{cells(c.values())}" for name, c in rows)
+        out.append("")
+        alone = tot["autonomous_under_default_policy"]
+        rest = len(tools) - alone
+        out.append(f"{_n(len(tools), 'tool')} across {_n(tot['servers_counted'], 'server')}.")
+        out.append(f"Under the default policy an agent may act alone on {alone} (R0–R1).")
+        if rest:
+            out.append(f"The other {rest} need{'s' if rest == 1 else ''} a human.")
+        if tot["unclassified"]:
+            n = tot["unclassified"]
+            out.append(f"{_n(n, 'tool')} counted as R4 only because nobody has classified "
+                       f"{'it' if n == 1 else 'them'} yet.")
+    worst = result.worst()
+    if worst is not None:
+        out.append(f"Worst class reachable: {worst} ({worst.label}).")
+    if tot["servers_unknown"]:
+        n = tot["servers_unknown"]
+        out.append(f"{_n(n, 'server')} could not be identified and {'counts' if n == 1 else 'count'} as R4.")
+    if tot["servers_not_scanned"]:
+        n = len(tot["servers_not_scanned"])
+        out.append(f"Incomplete: {_n(n, 'server')} could not be scanned.")
+    if not result.started:
+        out.append("Counts are the registry's, for the servers it recognises; nothing was started.")
+    if tools:
+        rev = tot["reviewed_by_a_person"]
+        out.append("Each tool is counted at its worst case."
+                   + ("" if not tot["registry_classified"] else
+                      " Registry classes are drafts." if rev == 0 else f" Registry classes are drafts except {rev}."))
+    out.append(SUMMARY_URL)
+    return "\n".join(out) + "\n"
+
+
 # --------------------------------------------------------------------------- draft records
 
 def _slug(text: str) -> str:

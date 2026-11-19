@@ -183,6 +183,10 @@ def cmd_scan(ns: argparse.Namespace) -> int:
     if ns.timeout <= 0:
         print("--timeout must be a positive number of seconds", file=sys.stderr)
         return EXIT_USAGE
+    if ns.summary and (ns.json or ns.details or ns.show_server_errors):
+        print("--summary cannot be combined with --json, --details or --show-server-errors: "
+              "it leaves out everything those add.", file=sys.stderr)
+        return EXIT_USAGE
     if ns.server:
         chosen = [s for s in servers if s.key in ns.server or s.key.split("/")[-1] in ns.server]
         if not chosen:
@@ -234,6 +238,9 @@ def cmd_scan(ns: argparse.Namespace) -> int:
 
     if ns.json:
         print(json.dumps(result.to_dict(), indent=2))
+    elif ns.summary:
+        public = {r["server"]["id"]: r["server"]["name"] for r in Registry.bundled().records}
+        print(sc.render_summary(result, public), end="")
     else:
         print(sc.render_text(result, details=ns.details, drafts_written=drafts > 0,
                              show_server_errors=ns.show_server_errors), end="")
@@ -410,6 +417,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="include every project in ~/.claude.json, not just the current folder's")
     sc.add_argument("--details", action="store_true", help="list every tool with its class")
     sc.add_argument("--json", action="store_true", help="machine-readable output")
+    sc.add_argument("--summary", action="store_true",
+                    help="a one-screen summary to paste in public: class counts, and names only for servers "
+                         "found in the public registry (no server keys, tool names, paths or arguments)")
     sc.add_argument("--timeout", type=float, default=60.0, help="seconds per server (default 60)")
     sc.add_argument("--fail-on", metavar="CLASS", type=str.upper, choices=[f"R{i}" for i in range(5)],
                     help="exit 1 if anything reachable is at or above CLASS (R0-R4); exit 3 if the scan is incomplete")

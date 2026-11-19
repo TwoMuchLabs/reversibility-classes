@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **`rclass scan --summary`**: a one-screen summary to paste in public. It shows class counts, names a server only when it matched a record in the bundled public registry, and folds every other server into one unnamed row. It prints no config path, server key, tool name, argument, environment value or server output. Counting and exit codes are the same as the full report: worst case per tool, and anything unrecognised is R4. It cannot be combined with `--json`, `--details` or `--show-server-errors`.
+
 ## v0.7.0 — 2026-10-25
 
 **Recognise your own servers.**

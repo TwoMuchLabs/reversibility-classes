@@ -507,3 +507,82 @@ def test_cli_rejects_bad_timeout_and_accepts_lowercase_class(tmp_path):   # N6
 def test_missing_registry_path_is_a_usage_error(tmp_path):
     cfg = write_config(tmp_path, {"t": {"command": "uvx", "args": ["mcp-server-time"]}})
     assert main(["scan", str(cfg), "--list", "--registry", str(tmp_path / "nope")]) == 2
+
+
+# ---------------------------------------------------------------- --summary: a report to paste in public
+def _private_record(tmp_path, sid, name, package):
+    rec = {"spec_version": "0.2",
+           "server": {"id": sid, "name": name, "source": "https://corp.test", "evidence": ["https://corp.test"],
+                      "packages": [package]},
+           "tools": [{"name": "read_ledger", "class": "R0", "rationale": "Reads."}]}
+    p = tmp_path / f"{sid}.json"
+    p.write_text(json.dumps(rec))
+    return p
+
+
+def test_summary_names_public_records_only_and_prints_nothing_of_yours(tmp_path, capsys):
+    cfg = write_config(tmp_path, {
+        "g": fake(tmp_path, "g", {"tools": git_tools()}),
+        "acme-billing-prod": {**fake(tmp_path, "b", {"tools": [{"name": "zap_customer_ledger"}, {"name": "peek_ledger"}]}),
+                              "env": {"API_KEY": SECRET}},
+    })
+    assert main(["scan", str(cfg), "--summary", "--assume", "g=git"]) == 0
+    out = capsys.readouterr().out
+    assert "Git" in out and "1 other server (not named)" in out
+    for private in ("acme-billing-prod", "zap_customer_ledger", "peek_ledger", "git_checkout", SECRET,
+                    str(tmp_path), "config.json", FAKE):
+        assert private not in out
+    lines = out.splitlines()
+    assert len(lines) <= 24 and max(map(len, lines)) <= 80           # one screen
+    full = sc.scan([cfg], REG, assume={"g": "git"}).totals()
+    assert next(ln for ln in lines if "Total" in ln).split() == ["Total", *map(str, full["by_class"].values())]
+    assert full["by_class"]["R4"] >= 2                                # both unrecognised tools counted as R4
+
+
+def test_summary_counts_the_unrecognised_as_r4(tmp_path, capsys):   # the roadmap's gate for a new output
+    cfg = write_config(tmp_path, {"t": {"command": "uvx", "args": ["mcp-server-time"]},
+                                  "n": {"command": "node", "args": ["mine.js"]},
+                                  "r": {"url": "https://unknown.example/mcp"}})
+    assert main(["scan", str(cfg), "--list", "--summary", "--fail-on", "R4"]) == 1
+    out = capsys.readouterr().out
+    assert "2 servers could not be identified and count as R4." in out
+    assert "Worst class reachable: R4 (Irreversible)." in out
+    assert "nothing was started" in out
+    assert "mine.js" not in out and "unknown.example" not in out
+
+
+def test_summary_does_not_name_your_own_registry_records(tmp_path, capsys):
+    own = _private_record(tmp_path, "corp-ledger", "Acme Secret Ledger", "@acme/ledger-mcp")
+    shadow = _private_record(tmp_path, "time", "Acme Internal Clock", "acme-clock-mcp")
+    cfg = write_config(tmp_path, {"l": {"command": "npx", "args": ["-y", "@acme/ledger-mcp"]},
+                                  "t": {"command": "uvx", "args": ["mcp-server-time"]}})
+    assert main(["scan", str(cfg), "--list", "--summary", "--registry", str(own), "--registry", str(shadow)]) == 0
+    out = capsys.readouterr().out
+    assert "Time (MCP reference" in out and "1 other server (not named)" in out
+    for private in ("Acme", "ledger", "corp-ledger", "@acme"):
+        assert private not in out
+
+
+def test_summary_folds_many_and_repeated_servers(tmp_path, capsys):
+    result = sc.ScanResult(configs=["c"], servers=[
+        sc.ServerReport(key=f"k{i}", config="c", status="static", record=f"p{i % 12}",
+                        tools=[sc.ToolReport("x", RClass.R1, "registry", "r")]) for i in range(13)])
+    out = sc.render_summary(result, {f"p{i}": f"Public {i}" for i in range(12)}, today="2026-11-20")
+    assert "Public 0 ×2" in out and "more public servers" in out
+    assert sum(1 for ln in out.splitlines() if ln.startswith("  ")) == 2 + sc.SUMMARY_ROWS   # header, total, rows
+    assert "2026-11-20" in out and "13 tools across 13 servers." in out
+
+
+def test_summary_refuses_flags_that_add_detail(tmp_path, capsys):
+    cfg = write_config(tmp_path, {"t": {"command": "uvx", "args": ["mcp-server-time"]}})
+    for flag in ("--json", "--details", "--show-server-errors"):
+        assert main(["scan", str(cfg), "--list", "--summary", flag]) == 2
+    assert "--summary cannot be combined" in capsys.readouterr().err
+
+
+def test_summary_with_only_unidentified_servers_says_r4_and_no_table(tmp_path, capsys):
+    cfg = write_config(tmp_path, {"n": {"command": "node", "args": ["mine.js"]}})
+    assert main(["scan", str(cfg), "--list", "--summary", "--fail-on", "R4"]) == 1
+    out = capsys.readouterr().out
+    assert "1 server could not be identified and counts as R4." in out and "Worst class reachable: R4" in out
+    assert "Total" not in out and "0 tools" not in out
