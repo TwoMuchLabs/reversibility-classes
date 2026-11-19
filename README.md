@@ -220,6 +220,8 @@ Most MCP gateways aren't written in Python. Two things make a port straightforwa
 
 The specification is v0.3.0, a draft for comment; `rclass` 0.5 implements it and adds `rclass scan`, the Claude Code hook and policy exports (the tool and the spec are versioned separately). See the [changelog](CHANGELOG.md). Open questions for v0.3 include a **detection window** (how long a mistake usually goes unnoticed), **pattern rules** for sequences of actions that are harmless alone but not together, and whether a reversibility hint belongs in MCP itself. See [SPEC section 12](SPEC.md#12-open-questions-for-v03).
 
+How the classes reach more agent hosts and a simpler install is proposed in the [distribution roadmap](docs/roadmap.md).
+
 ## License
 
 Specification, schema, conformance vectors and code: [Apache 2.0](LICENSE), which includes a patent grant to implementers. Registry data and other documentation: [CC BY 4.0](LICENSE-SPEC-AND-DATA.md). To cite, see [CITATION.cff](CITATION.cff).
