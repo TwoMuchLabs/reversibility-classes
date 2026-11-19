@@ -15,7 +15,7 @@ The classes are only useful where they are enforced, so each manual step above i
 
 ## Now
 
-- [ ] **Publish to PyPI**, so the install is `pipx install <name>` and a first scan is one line with no clone. Confirm the package name is available before promising it anywhere.
+- [ ] **Publish to PyPI**, so the install is `pipx install <name>` and a first scan is one line with no clone. Confirm the package name is available before promising it anywhere. The build and the one-time setup are prepared; see [releasing](releasing.md). Not published yet.
 - [ ] **Claude Code plugin marketplace entry** that installs the PreToolUse hook in one command, in place of the manual settings merge. The hook's behaviour does not change: any error still asks, and a hook can still only make the host stricter.
 - [x] **A shareable scan summary** (`rclass scan --summary`, unreleased). An opt-in `rclass scan` output that fits on one screen and is safe to paste in public: counts per class and the names of public registry records only, with no arguments, environment values, internal server names or paths.
 

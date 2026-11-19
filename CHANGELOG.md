@@ -1,8 +1,14 @@
 # Changelog
 
-## Unreleased
+## v0.8.0 — 2026-11-20
+
+**Share what your agent can't undo, without sharing your setup.**
 
 - **`rclass scan --summary`**: a one-screen summary to paste in public. It shows class counts, names a server only when it matched a record in the bundled public registry, and folds every other server into one unnamed row. It prints no config path, server key, tool name, argument, environment value or server output. Counting and exit codes are the same as the full report: worst case per tool, and anything unrecognised is R4. It cannot be combined with `--json`, `--details` or `--show-server-errors`.
+- **Packaging.** The README's relative links are rewritten to this version's tag when the package is built, so they resolve on a package index page. This adds one build-time dependency, `hatch-fancy-pypi-readme`; nothing changes at run time.
+- A [distribution roadmap](docs/roadmap.md) proposes how the classes reach more agent hosts.
+
+**Install:** `pip install git+https://github.com/TwoMuchLabs/reversibility-classes@v0.8.0`
 
 ## v0.7.0 — 2026-10-25
 
